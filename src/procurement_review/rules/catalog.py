@@ -96,3 +96,6 @@ class RuleCatalog:
                 continue
             results.append(rule)
         return results
+
+
+RuleEngine = RuleCatalog

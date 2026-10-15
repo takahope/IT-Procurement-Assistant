@@ -24,7 +24,6 @@ from procurement_review.domain.models import (
     ContextBundle,
     CoverageMatrix,
     DetectedSpan,
-    ExportPaths,
     HumanDecision,
     MaskingSession,
     OutboundDraft,
@@ -57,9 +56,6 @@ from procurement_review.storage.repository import Repository
 from procurement_review.storage.secrets import FakeSecretStore
 from procurement_review.storage.vault import ArtifactStore
 from procurement_review.web.app import create_app
-
-ExportPaths.markdown = property(lambda self: Path(self.markdown_path))
-ExportPaths.json = property(lambda self: Path(self.json_path))
 
 
 @pytest.fixture
@@ -146,6 +142,21 @@ def test_doctor_command_synthetic_mode(tmp_path: Path, capsys):
     # 驗證零機敏洩漏：絕不印出金鑰原文或十六進位敏感密文
     assert "0" * 32 not in captured
     assert "artifact_master_key:" not in captured or "artifact_master_key: [PROTECTED]" in captured
+
+
+def test_doctor_command_fails_on_insecure_permissions(tmp_path: Path, capsys):
+    """驗證 doctor 命令在資料目錄權限不安全 (0o777) 時會標記失敗並以退出碼 1 終止。"""
+    insecure_dir = tmp_path / "insecure_data"
+    insecure_dir.mkdir(parents=True, mode=0o777)
+    insecure_dir.chmod(0o777)
+
+    with pytest.raises(SystemExit) as exc_info:
+        main(["doctor", "--mode", "synthetic", "--data-dir", str(insecure_dir)])
+
+    assert exc_info.value.code == 1
+    captured = capsys.readouterr().out
+    assert "[FAIL] 資料目錄權限不安全" in captured
+    assert "系統診斷未通過" in captured
 
 
 def test_end_to_end_software_maintenance(env):

@@ -1,4 +1,5 @@
 import argparse
+import json
 import os
 import sys
 from datetime import UTC, date, datetime
@@ -8,7 +9,8 @@ import uvicorn
 
 from procurement_review.domain.enums import RuntimeMode
 from procurement_review.domain.errors import DomainError
-from procurement_review.domain.models import RuntimePolicy
+from procurement_review.domain.models import Rule, RuntimePolicy, SourceReference
+from procurement_review.rules.catalog import RuleEngine
 from procurement_review.runtime.lifecycle import (
     create_backup,
     execute_purge,
@@ -238,6 +240,167 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def doctor(args: argparse.Namespace, secrets: SecretStore | None = None) -> None:
+    has_error = False
+
+    data_dir = Path(args.data_dir).resolve()
+    dir_existed = data_dir.exists()
+    data_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+    if not dir_existed:
+        data_dir.chmod(0o700)
+    vault_root = data_dir / "vault"
+    vault_root.mkdir(parents=True, exist_ok=True, mode=0o700)
+    db_path = data_dir / "procurement_review.db"
+
+    mode = _resolve_mode(args.mode)
+    active_secrets = _get_cli_secrets(
+        mode=mode,
+        data_dir=data_dir,
+        vault_root=vault_root,
+        master_key_arg=getattr(args, "master_key", None),
+        provided_secrets=secrets,
+    )
+
+    print("=" * 70)
+    print("中央研究院資訊採購合約資安審查助手 — 系統自我診斷 (Doctor)")
+    print(f"模式: {mode.value}")
+    print(f"資料目錄: {data_dir}")
+    print("-" * 70)
+
+    # 1. Python 執行環境
+    py_ver = sys.version.split()[0]
+    py_ok = sys.version_info >= (3, 11)
+    if py_ok:
+        print(f"[OK] Python 執行環境: v{py_ver} (滿足需求 >= 3.11)")
+    else:
+        print(f"[FAIL] Python 執行環境: v{py_ver} (需求 >= 3.11)")
+        has_error = True
+
+    # 2. 核心相依套件檢查
+    required_packages = [
+        "fastapi",
+        "pydantic",
+        "uvicorn",
+        "cryptography",
+        "httpx",
+        "docx",
+        "pypdf",
+        "sqlite3",
+    ]
+    missing_pkgs = []
+    for pkg in required_packages:
+        try:
+            __import__(pkg)
+        except ImportError:
+            missing_pkgs.append(pkg)
+    if not missing_pkgs:
+        print(f"[OK] 核心相依套件: {len(required_packages)}/{len(required_packages)} 項就緒")
+    else:
+        print(f"[FAIL] 缺少相依套件: {missing_pkgs}")
+        has_error = True
+
+    # 3. 資料目錄與權限檢查
+    stat_mode = data_dir.stat().st_mode
+    if (stat_mode & 0o777) == 0o700:
+        print(f"[OK] 資料根目錄與 Vault: 權限就緒 ({oct(stat_mode & 0o777)}), 儲存路徑正常")
+    else:
+        print(f"[FAIL] 資料目錄權限不安全 (目前: {oct(stat_mode & 0o777)}, 要求: 0o700)")
+        has_error = True
+
+    # 4. SecretStore 金鑰儲存庫檢查 (絕不洩漏密鑰原文)
+    if (
+        mode == RuntimeMode.SYNTHETIC
+        and isinstance(active_secrets, FakeSecretStore)
+        and not active_secrets.get_key("artifact_master_key")
+    ):
+        test_key = b"\x00" * 32
+        active_secrets.set_key("artifact_master_key", test_key)
+        (data_dir / ".synthetic_key").write_bytes(test_key)
+    has_key = active_secrets.get_key("artifact_master_key") is not None
+    store_type = active_secrets.__class__.__name__
+    print(f"[OK] SecretStore 金鑰儲存庫: {store_type} (主資料金鑰: {'已配置 [PROTECTED]' if has_key else '未配置'})")
+
+    # 5. SQLite 資料庫連線與結構初始
+    try:
+        artifacts = ArtifactStore(root=vault_root, secrets=active_secrets)
+        repo = Repository(db=db_path, artifacts=artifacts)
+        with repo._conn() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT 1;")
+            cur.fetchone()
+        print(f"[OK] SQLite 資料庫連線: 正常 ({db_path.name}, WAL 模式已就緒)")
+    except Exception as err:  # noqa: BLE001
+        print(f"[FAIL] SQLite 資料庫連線失敗: {err}")
+        has_error = True
+
+    # 6. 規則包與法規清單
+    rules_root = Path.cwd() / "rules"
+    if not rules_root.exists():
+        rules_root = Path(__file__).resolve().parent.parent.parent / "rules"
+
+    rules_ok = True
+    rules_issues: list[str] = []
+    if not rules_root.exists() or not (rules_root / "drafts").exists():
+        rules_ok = False
+        rules_issues.append(f"規則目錄不存在: {rules_root}")
+    else:
+        draft_files = list((rules_root / "drafts").glob("*.json"))
+        if not draft_files:
+            rules_ok = False
+            rules_issues.append("未找到任何規則包 JSON 檔案")
+        else:
+            engine = RuleEngine()
+            for df in sorted(draft_files):
+                try:
+                    with open(df, "r", encoding="utf-8") as f:
+                        content = json.load(f)
+                    for r_dict in content.get("rules", []):
+                        r = Rule.model_validate(r_dict)
+                        engine.register_rule(r)
+                except Exception as err:  # noqa: BLE001
+                    rules_ok = False
+                    rules_issues.append(f"規則檔 {df.name} 載入或驗證失敗: {err}")
+
+            manifest_file = rules_root / "sources" / "manifest.json"
+            if manifest_file.exists():
+                try:
+                    with open(manifest_file, "r", encoding="utf-8") as f:
+                        m_data = json.load(f)
+                    for s in m_data.get("sources", []):
+                        s_kwargs = {k: v for k, v in s.items() if k != "retrieval_status"}
+                        src = SourceReference.model_validate(s_kwargs)
+                        engine.register_source(src)
+                except Exception as err:  # noqa: BLE001
+                    rules_ok = False
+                    rules_issues.append(f"來源清單 {manifest_file.name} 驗證失敗: {err}")
+
+    packs = ["software_maintenance", "custom_software", "cloud_service", "mixed"]
+    if rules_ok:
+        print(f"[OK] 規則包狀態: 4/4 採購分類就緒 ({', '.join(packs)})")
+    else:
+        print(f"[FAIL] 規則庫驗證失敗: {'; '.join(rules_issues)}")
+        has_error = True
+
+    # 7. 供應商與模型權重組態
+    if mode == RuntimeMode.SYNTHETIC:
+        provider_desc = "MockProviderAdapter (離線合成模式，預設端點 https://mock.provider.local/v1/chat/completions)"
+    else:
+        provider_desc = "CloudAdapter (已核准雲端供應商)"
+    print(f"[OK] 供應商與模型權重組態: {provider_desc}")
+
+    # 8. 生命週期與受控清除機制
+    print("[OK] 生命週期與受控清除: 30天保存政策、墓碑審計紀錄表與安全復原閘門就緒")
+    print("-" * 70)
+
+    if has_error:
+        print("[FAIL] 系統診斷未通過：請排除上述問題後重試。")
+        print("=" * 70)
+        sys.exit(1)
+    else:
+        print("[OK] 系統診斷完成：所有必要環境檢查通過。")
+        print("=" * 70)
+
+
 def main(argv: list[str] | None = None, secrets: SecretStore | None = None) -> None:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -420,99 +583,7 @@ def main(argv: list[str] | None = None, secrets: SecretStore | None = None) -> N
         print("=" * 70)
 
     elif args.command == "doctor":
-        data_dir = Path(args.data_dir).resolve()
-        data_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
-        vault_root = data_dir / "vault"
-        vault_root.mkdir(parents=True, exist_ok=True, mode=0o700)
-        db_path = data_dir / "procurement_review.db"
-
-        mode = _resolve_mode(args.mode)
-        active_secrets = _get_cli_secrets(
-            mode=mode,
-            data_dir=data_dir,
-            vault_root=vault_root,
-            master_key_arg=getattr(args, "master_key", None),
-            provided_secrets=secrets,
-        )
-
-        print("=" * 70)
-        print("中央研究院資訊採購合約資安審查助手 — 系統自我診斷 (Doctor)")
-        print(f"模式: {mode.value}")
-        print(f"資料目錄: {data_dir}")
-        print("-" * 70)
-
-        # 1. Python 執行環境
-        py_ver = sys.version.split()[0]
-        py_ok = sys.version_info >= (3, 11)
-        if py_ok:
-            print(f"[OK] Python 執行環境: v{py_ver} (滿足需求 >= 3.11)")
-        else:
-            print(f"[FAIL] Python 執行環境: v{py_ver} (需求 >= 3.11)")
-
-        # 2. 核心相依套件檢查
-        required_packages = [
-            "fastapi",
-            "pydantic",
-            "uvicorn",
-            "cryptography",
-            "httpx",
-            "docx",
-            "pypdf",
-            "sqlite3",
-        ]
-        missing_pkgs = []
-        for pkg in required_packages:
-            try:
-                __import__(pkg)
-            except ImportError:
-                missing_pkgs.append(pkg)
-        if not missing_pkgs:
-            print(f"[OK] 核心相依套件: {len(required_packages)}/{len(required_packages)} 項就緒")
-        else:
-            print(f"[FAIL] 缺少相依套件: {missing_pkgs}")
-
-        # 3. 資料目錄與權限檢查
-        stat_mode = oct(data_dir.stat().st_mode & 0o777)
-        print(f"[OK] 資料根目錄與 Vault: 權限就緒 ({stat_mode}), 儲存路徑正常")
-
-        # 4. SecretStore 金鑰儲存庫檢查 (絕不洩漏密鑰原文)
-        if (
-            mode == RuntimeMode.SYNTHETIC
-            and isinstance(active_secrets, FakeSecretStore)
-            and not active_secrets.get_key("artifact_master_key")
-        ):
-            test_key = b"\x00" * 32
-            active_secrets.set_key("artifact_master_key", test_key)
-            (data_dir / ".synthetic_key").write_bytes(test_key)
-        has_key = active_secrets.get_key("artifact_master_key") is not None
-        store_type = active_secrets.__class__.__name__
-        print(f"[OK] SecretStore 金鑰儲存庫: {store_type} (主資料金鑰: {'已配置 [PROTECTED]' if has_key else '未配置'})")
-
-        # 5. SQLite 資料庫連線與結構初始
-        artifacts = ArtifactStore(root=vault_root, secrets=active_secrets)
-        repo = Repository(db=db_path, artifacts=artifacts)
-        with repo._conn() as conn:
-            cur = conn.cursor()
-            cur.execute("SELECT 1;")
-            cur.fetchone()
-        print(f"[OK] SQLite 資料庫連線: 正常 ({db_path.name}, WAL 模式已就緒)")
-
-        # 6. 規則包與法規清單
-        packs = ["software_maintenance", "custom_software", "cloud_service", "mixed"]
-        print(f"[OK] 規則包狀態: 4/4 採購分類就緒 ({', '.join(packs)})")
-
-        # 7. 供應商與模型權重組態
-        if mode == RuntimeMode.SYNTHETIC:
-            provider_desc = "MockProviderAdapter (離線合成模式，預設端點 https://mock.provider.local/v1/chat/completions)"
-        else:
-            provider_desc = "CloudAdapter (已核准雲端供應商)"
-        print(f"[OK] 供應商與模型權重組態: {provider_desc}")
-
-        # 8. 生命週期與受控清除機制
-        print("[OK] 生命週期與受控清除: 30天保存政策、墓碑審計紀錄表與安全復原閘門就緒")
-        print("-" * 70)
-        print("[OK] 系統診斷完成：所有必要環境檢查通過。")
-        print("=" * 70)
+        doctor(args, secrets=secrets)
 
 
 if __name__ == "__main__":

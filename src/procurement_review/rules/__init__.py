@@ -4,6 +4,7 @@ from procurement_review.rules.applicability import (
 )
 from procurement_review.rules.catalog import (
     RuleCatalog,
+    RuleEngine,
     compute_requirement_hash,
     compute_rule_hash,
     compute_source_hash,
@@ -17,6 +18,7 @@ from procurement_review.rules.releases import (
 
 __all__ = [
     "RuleCatalog",
+    "RuleEngine",
     "compute_requirement_hash",
     "compute_rule_hash",
     "compute_source_hash",

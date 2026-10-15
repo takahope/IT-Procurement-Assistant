@@ -2,6 +2,7 @@ import json
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
+from pathlib import Path
 from typing import Annotated, Any
 
 from pydantic import (
@@ -637,6 +638,14 @@ class ExportPaths(StrictBaseModel):
     markdown_path: str
     json_path: str
     redaction_mode: RedactionMode = RedactionMode.MASKED
+
+    @property
+    def markdown(self) -> Path:
+        return Path(self.markdown_path)
+
+    @property
+    def json(self) -> Path:
+        return Path(self.json_path)
 
 
 class GateReport(StrictBaseModel):
