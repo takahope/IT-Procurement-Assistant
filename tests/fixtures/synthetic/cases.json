@@ -1,0 +1,297 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "version": "1.0",
+  "cases": [
+    {
+      "case_id": "11111111-1111-4111-8111-111111111111",
+      "title": "資訊系統日常維運與機房駐點勞務採購合約",
+      "contract_type": "services",
+      "contract_version": "1.0",
+      "original_file_hash": "a1b2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef0",
+      "attachments": [
+        {
+          "attachment_id": "att-001",
+          "title": "工作說明書",
+          "mandatory": true,
+          "present": true
+        },
+        {
+          "attachment_id": "att-002",
+          "title": "資通安全特別條款",
+          "mandatory": true,
+          "present": true
+        }
+      ],
+      "facts": {
+        "procurement_unit": "中央研究院資訊科學研究所",
+        "procurement_system": "政府採購法",
+        "procurement_system_confirmed": true,
+        "statutory_category": "勞務採購",
+        "procurement_families": [
+          "services"
+        ],
+        "service_scope": "核心網路設備維護與機房主機日常監控，派駐工程師於上班時間現場服務",
+        "personal_data_involved": false,
+        "sensitive_data_involved": true,
+        "data_flow_cross_border": false,
+        "data_locations": [
+          "臺灣院內機房"
+        ],
+        "remote_access": null,
+        "core_system": true,
+        "security_level": "高",
+        "budget_amount": "3600000",
+        "currency": "TWD",
+        "period_start": "2026-11-01",
+        "period_end": "2027-10-31",
+        "expected_signing_date": "2026-10-28",
+        "expected_delivery_date": "2027-10-31",
+        "review_baseline_date": "2026-10-15",
+        "unknown_fields": [
+          "remote_access"
+        ]
+      },
+      "sensitivity_level": "confidential",
+      "created_by": "承辦人員A",
+      "created_at": "2026-10-15T09:00:00Z",
+      "state": "imported",
+      "document_snapshot_ref": null,
+      "confirmation_history": [],
+      "revision": 1
+    },
+    {
+      "case_id": "22222222-2222-4222-8222-222222222222",
+      "title": "巨量學術運算雲端平台訂閱與儲存採購合約",
+      "contract_type": "cloud",
+      "contract_version": "1.0",
+      "original_file_hash": "b2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef01a",
+      "attachments": [
+        {
+          "attachment_id": "att-cloud-1",
+          "title": "雲端服務水準協議 (SLA)",
+          "mandatory": true,
+          "present": true
+        },
+        {
+          "attachment_id": "att-cloud-2",
+          "title": "資料處理協議 (DPA)",
+          "mandatory": true,
+          "present": true
+        }
+      ],
+      "facts": {
+        "procurement_unit": "中央研究院總辦事處資訊服務處",
+        "procurement_system": "政府採購法",
+        "procurement_system_confirmed": true,
+        "statutory_category": "勞務採購",
+        "procurement_families": [
+          "cloud"
+        ],
+        "service_scope": "彈性GPU計算資源租用及物件儲存服務",
+        "personal_data_involved": true,
+        "sensitive_data_involved": true,
+        "data_flow_cross_border": false,
+        "data_locations": [
+          "臺灣北部資料中心"
+        ],
+        "remote_access": true,
+        "core_system": false,
+        "security_level": "中",
+        "budget_amount": "1800000",
+        "currency": "TWD",
+        "period_start": "2027-01-01",
+        "period_end": "2027-12-31",
+        "expected_signing_date": "2026-12-15",
+        "expected_delivery_date": "2027-12-31",
+        "review_baseline_date": "2026-10-15",
+        "unknown_fields": []
+      },
+      "sensitivity_level": "confidential",
+      "created_by": "承辦人員B",
+      "created_at": "2026-10-15T09:30:00Z",
+      "state": "imported",
+      "document_snapshot_ref": null,
+      "confirmation_history": [],
+      "revision": 1
+    },
+    {
+      "case_id": "33333333-3333-4333-8333-333333333333",
+      "title": "科學資料視覺化套裝軟體年度授權與原廠標準維護契約",
+      "contract_type": "cots",
+      "contract_version": "1.0",
+      "original_file_hash": "c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef01ab2",
+      "attachments": [
+        {
+          "attachment_id": "att-cots-1",
+          "title": "軟體終端使用者授權合約 (EULA)",
+          "mandatory": true,
+          "present": true
+        },
+        {
+          "attachment_id": "att-cots-2",
+          "title": "原廠授權證明書",
+          "mandatory": true,
+          "present": true
+        }
+      ],
+      "facts": {
+        "procurement_unit": "中央研究院統計科學研究所",
+        "procurement_system": "中央研究院科學技術研究發展採購作業要點",
+        "procurement_system_confirmed": true,
+        "statutory_category": "財物採購",
+        "procurement_families": [
+          "cots"
+        ],
+        "service_scope": "50人份套裝軟體浮動授權及次版本安全修補更新",
+        "personal_data_involved": false,
+        "sensitive_data_involved": false,
+        "data_flow_cross_border": false,
+        "data_locations": [
+          "院內研究端點電腦"
+        ],
+        "remote_access": false,
+        "core_system": false,
+        "security_level": "普",
+        "budget_amount": "950000",
+        "currency": "TWD",
+        "period_start": "2026-11-15",
+        "period_end": "2027-11-14",
+        "expected_signing_date": "2026-11-01",
+        "expected_delivery_date": "2026-11-15",
+        "review_baseline_date": "2026-10-15",
+        "unknown_fields": []
+      },
+      "sensitivity_level": "internal",
+      "created_by": "承辦人員C",
+      "created_at": "2026-10-15T10:00:00Z",
+      "state": "imported",
+      "document_snapshot_ref": null,
+      "confirmation_history": [],
+      "revision": 1
+    },
+    {
+      "case_id": "44444444-4444-4444-8444-444444444444",
+      "title": "學術研究成果開放典藏入口系統客製化開發採購契約",
+      "contract_type": "development",
+      "contract_version": "1.0",
+      "original_file_hash": "d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef01ab2c3",
+      "attachments": [
+        {
+          "attachment_id": "att-dev-1",
+          "title": "系統需求規格書",
+          "mandatory": true,
+          "present": true
+        },
+        {
+          "attachment_id": "att-dev-2",
+          "title": "安全軟體開發生命週期 (SSDLC) 要求",
+          "mandatory": true,
+          "present": true
+        },
+        {
+          "attachment_id": "att-dev-3",
+          "title": "原始碼智慧財產權授權同意書",
+          "mandatory": true,
+          "present": true
+        }
+      ],
+      "facts": {
+        "procurement_unit": "中央研究院歷史語言研究所",
+        "procurement_system": "政府採購法",
+        "procurement_system_confirmed": true,
+        "statutory_category": "勞務採購",
+        "procurement_families": [
+          "development"
+        ],
+        "service_scope": "開放典藏入口前台與典藏後台管理系統委託軟體開發、原始碼移交與原始碼弱點掃描",
+        "personal_data_involved": true,
+        "sensitive_data_involved": false,
+        "data_flow_cross_border": false,
+        "data_locations": [
+          "院內地端伺服器"
+        ],
+        "remote_access": true,
+        "core_system": false,
+        "security_level": "中",
+        "budget_amount": "4800000",
+        "currency": "TWD",
+        "period_start": "2026-12-01",
+        "period_end": "2027-11-30",
+        "expected_signing_date": "2026-11-20",
+        "expected_delivery_date": "2027-11-30",
+        "review_baseline_date": "2026-10-15",
+        "unknown_fields": []
+      },
+      "sensitivity_level": "confidential",
+      "created_by": "承辦人員D",
+      "created_at": "2026-10-15T10:30:00Z",
+      "state": "imported",
+      "document_snapshot_ref": null,
+      "confirmation_history": [],
+      "revision": 1
+    },
+    {
+      "case_id": "55555555-5555-4555-8555-555555555555",
+      "title": "雲端協同研究平台與專業統計分析軟體整合訂閱契約",
+      "contract_type": "cloud",
+      "contract_version": "1.0",
+      "original_file_hash": "e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef01ab2c3d4",
+      "attachments": [
+        {
+          "attachment_id": "att-mix-1",
+          "title": "雲端服務合約條款",
+          "mandatory": true,
+          "present": true
+        },
+        {
+          "attachment_id": "att-mix-2",
+          "title": "套裝軟體模組授權協議 (EULA)",
+          "mandatory": true,
+          "present": true
+        },
+        {
+          "attachment_id": "att-mix-3",
+          "title": "個人資料保護與跨國傳輸條款",
+          "mandatory": true,
+          "present": true
+        }
+      ],
+      "facts": {
+        "procurement_unit": "中央研究院生物醫學科學研究所",
+        "procurement_system": "政府採購法",
+        "procurement_system_confirmed": true,
+        "statutory_category": "財物與勞務混合採購",
+        "procurement_families": [
+          "cloud",
+          "cots"
+        ],
+        "service_scope": "SaaS雲端協同平台租用，並加購本地離線運算專用套裝分析軟體授權與年度技術支援",
+        "personal_data_involved": true,
+        "sensitive_data_involved": true,
+        "data_flow_cross_border": true,
+        "data_locations": [
+          "臺灣",
+          "日本東京"
+        ],
+        "remote_access": true,
+        "core_system": true,
+        "security_level": "高",
+        "budget_amount": "6200000",
+        "currency": "TWD",
+        "period_start": "2027-01-01",
+        "period_end": "2027-12-31",
+        "expected_signing_date": "2026-12-10",
+        "expected_delivery_date": "2027-12-31",
+        "review_baseline_date": "2026-10-15",
+        "unknown_fields": []
+      },
+      "sensitivity_level": "confidential",
+      "created_by": "承辦人員E",
+      "created_at": "2026-10-15T11:00:00Z",
+      "state": "imported",
+      "document_snapshot_ref": null,
+      "confirmation_history": [],
+      "revision": 1
+    }
+  ]
+}

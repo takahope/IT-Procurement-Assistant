@@ -1,0 +1,3786 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ProcurementReviewDomainSchemas",
+  "description": "JSON Schemas for Central Research Institute Security Procurement Review Assistant",
+  "version": "0.1.0",
+  "models": {
+    "VersionRef": {
+      "additionalProperties": false,
+      "description": "不可變版本參照",
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "version": {
+          "title": "Version",
+          "type": "string"
+        },
+        "sha256": {
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "version",
+        "sha256"
+      ],
+      "title": "VersionRef",
+      "type": "object"
+    },
+    "CaseFacts": {
+      "$defs": {
+        "ProcurementFamily": {
+          "description": "採購類別情境",
+          "enum": [
+            "services",
+            "cloud",
+            "cots",
+            "development"
+          ],
+          "title": "ProcurementFamily",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "description": "案件背景事實（規格 §3.1）\n\n未知值使用 None 並列於 unknown_fields，不把空值判定為 False。\n金額欄位嚴格禁止二進位浮點數。",
+      "properties": {
+        "procurement_unit": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Procurement Unit"
+        },
+        "procurement_system": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Procurement System"
+        },
+        "procurement_system_confirmed": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Procurement System Confirmed"
+        },
+        "statutory_category": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Statutory Category"
+        },
+        "procurement_families": {
+          "items": {
+            "$ref": "#/$defs/ProcurementFamily"
+          },
+          "title": "Procurement Families",
+          "type": "array"
+        },
+        "service_scope": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Service Scope"
+        },
+        "personal_data_involved": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Personal Data Involved"
+        },
+        "sensitive_data_involved": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sensitive Data Involved"
+        },
+        "data_flow_cross_border": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Data Flow Cross Border"
+        },
+        "data_locations": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Data Locations",
+          "type": "array"
+        },
+        "remote_access": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Remote Access"
+        },
+        "core_system": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Core System"
+        },
+        "security_level": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Security Level"
+        },
+        "budget_amount": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Budget Amount"
+        },
+        "currency": {
+          "default": "TWD",
+          "title": "Currency",
+          "type": "string"
+        },
+        "period_start": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Period Start"
+        },
+        "period_end": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Period End"
+        },
+        "expected_signing_date": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Expected Signing Date"
+        },
+        "expected_delivery_date": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Expected Delivery Date"
+        },
+        "review_baseline_date": {
+          "format": "date",
+          "title": "Review Baseline Date",
+          "type": "string"
+        },
+        "unknown_fields": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Unknown Fields",
+          "type": "array"
+        }
+      },
+      "required": [
+        "review_baseline_date"
+      ],
+      "title": "CaseFacts",
+      "type": "object"
+    },
+    "RuntimePolicy": {
+      "$defs": {
+        "RuntimeMode": {
+          "description": "執行環境模式",
+          "enum": [
+            "synthetic",
+            "real"
+          ],
+          "title": "RuntimeMode",
+          "type": "string"
+        },
+        "VersionRef": {
+          "additionalProperties": false,
+          "description": "不可變版本參照",
+          "properties": {
+            "id": {
+              "title": "Id",
+              "type": "string"
+            },
+            "version": {
+              "title": "Version",
+              "type": "string"
+            },
+            "sha256": {
+              "title": "Sha256",
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "version",
+            "sha256"
+          ],
+          "title": "VersionRef",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "description": "執行期政策與核准參照",
+      "properties": {
+        "mode": {
+          "$ref": "#/$defs/RuntimeMode",
+          "default": "synthetic"
+        },
+        "data_root": {
+          "title": "Data Root",
+          "type": "string"
+        },
+        "provider_approval_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/VersionRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "storage_approval_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/VersionRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "retention_approval_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/VersionRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "masking_approval_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/VersionRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "rules_approval_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/VersionRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "allowed_endpoints": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Allowed Endpoints",
+          "type": "array"
+        }
+      },
+      "required": [
+        "data_root"
+      ],
+      "title": "RuntimePolicy",
+      "type": "object"
+    },
+    "SourceReference": {
+      "$defs": {
+        "SourceNature": {
+          "description": "來源性質",
+          "enum": [
+            "applicable_law",
+            "institution_policy",
+            "standard_template",
+            "guideline_recommendation"
+          ],
+          "title": "SourceNature",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "description": "法規、內規、範本或建議來源參照",
+      "properties": {
+        "source_id": {
+          "title": "Source Id",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/SourceNature"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "issuer": {
+          "title": "Issuer",
+          "type": "string"
+        },
+        "locator": {
+          "title": "Locator",
+          "type": "string"
+        },
+        "section": {
+          "title": "Section",
+          "type": "string"
+        },
+        "version": {
+          "title": "Version",
+          "type": "string"
+        },
+        "published_at": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Published At"
+        },
+        "effective_from": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Effective From"
+        },
+        "effective_to": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Effective To"
+        },
+        "verified_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Verified At"
+        },
+        "verified_by": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Verified By"
+        },
+        "content_hash": {
+          "title": "Content Hash",
+          "type": "string"
+        },
+        "access_class": {
+          "default": "internal",
+          "title": "Access Class",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_id",
+        "kind",
+        "title",
+        "issuer",
+        "locator",
+        "section",
+        "version",
+        "content_hash"
+      ],
+      "title": "SourceReference",
+      "type": "object"
+    },
+    "Rule": {
+      "$defs": {
+        "ProcurementFamily": {
+          "description": "採購類別情境",
+          "enum": [
+            "services",
+            "cloud",
+            "cots",
+            "development"
+          ],
+          "title": "ProcurementFamily",
+          "type": "string"
+        },
+        "RiskLevel": {
+          "description": "風險分級",
+          "enum": [
+            "critical",
+            "high",
+            "medium",
+            "low",
+            "info"
+          ],
+          "title": "RiskLevel",
+          "type": "string"
+        },
+        "RuleStatus": {
+          "description": "規則狀態",
+          "enum": [
+            "draft",
+            "pending_approval",
+            "active",
+            "superseded",
+            "revoked"
+          ],
+          "title": "RuleStatus",
+          "type": "string"
+        },
+        "VersionRef": {
+          "additionalProperties": false,
+          "description": "不可變版本參照",
+          "properties": {
+            "id": {
+              "title": "Id",
+              "type": "string"
+            },
+            "version": {
+              "title": "Version",
+              "type": "string"
+            },
+            "sha256": {
+              "title": "Sha256",
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "version",
+            "sha256"
+          ],
+          "title": "VersionRef",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "description": "核准規則定義",
+      "properties": {
+        "rule_id": {
+          "title": "Rule Id",
+          "type": "string"
+        },
+        "version": {
+          "title": "Version",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/RuleStatus",
+          "default": "draft"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "category": {
+          "$ref": "#/$defs/ProcurementFamily"
+        },
+        "requirement_text": {
+          "title": "Requirement Text",
+          "type": "string"
+        },
+        "source_refs": {
+          "items": {
+            "$ref": "#/$defs/VersionRef"
+          },
+          "title": "Source Refs",
+          "type": "array"
+        },
+        "applicability": {
+          "additionalProperties": true,
+          "title": "Applicability",
+          "type": "object"
+        },
+        "mandatory": {
+          "default": true,
+          "title": "Mandatory",
+          "type": "boolean"
+        },
+        "severity": {
+          "$ref": "#/$defs/RiskLevel",
+          "default": "medium"
+        },
+        "non_negotiable": {
+          "default": false,
+          "title": "Non Negotiable",
+          "type": "boolean"
+        },
+        "company_position": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Company Position"
+        },
+        "fallback_positions": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Fallback Positions",
+          "type": "array"
+        },
+        "deterministic_checks": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Deterministic Checks",
+          "type": "array"
+        },
+        "target_sentences": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Target Sentences",
+          "type": "array"
+        },
+        "example_clauses": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Example Clauses",
+          "type": "array"
+        },
+        "conflicts_with": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Conflicts With",
+          "type": "array"
+        },
+        "supersedes": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Supersedes",
+          "type": "array"
+        },
+        "approved_by": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Approved By"
+        },
+        "approved_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Approved At"
+        },
+        "effective_from": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Effective From"
+        },
+        "effective_to": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Effective To"
+        },
+        "change_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Change Reason"
+        },
+        "test_case_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Test Case Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "rule_id",
+        "version",
+        "title",
+        "category",
+        "requirement_text"
+      ],
+      "title": "Rule",
+      "type": "object"
+    },
+    "Requirement": {
+      "$defs": {
+        "RiskLevel": {
+          "description": "風險分級",
+          "enum": [
+            "critical",
+            "high",
+            "medium",
+            "low",
+            "info"
+          ],
+          "title": "RiskLevel",
+          "type": "string"
+        },
+        "VersionRef": {
+          "additionalProperties": false,
+          "description": "不可變版本參照",
+          "properties": {
+            "id": {
+              "title": "Id",
+              "type": "string"
+            },
+            "version": {
+              "title": "Version",
+              "type": "string"
+            },
+            "sha256": {
+              "title": "Sha256",
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "version",
+            "sha256"
+          ],
+          "title": "VersionRef",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "description": "單一可判斷資安要求契約",
+      "properties": {
+        "requirement_id": {
+          "title": "Requirement Id",
+          "type": "string"
+        },
+        "version": {
+          "title": "Version",
+          "type": "string"
+        },
+        "rule_ref": {
+          "$ref": "#/$defs/VersionRef"
+        },
+        "obligation": {
+          "title": "Obligation",
+          "type": "string"
+        },
+        "obligor": {
+          "title": "Obligor",
+          "type": "string"
+        },
+        "condition": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Condition"
+        },
+        "mandatory": {
+          "default": true,
+          "title": "Mandatory",
+          "type": "boolean"
+        },
+        "evidence_requirements": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Evidence Requirements",
+          "type": "array"
+        },
+        "deterministic_checks": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Deterministic Checks",
+          "type": "array"
+        },
+        "risk_level": {
+          "$ref": "#/$defs/RiskLevel",
+          "default": "medium"
+        },
+        "required_documents": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Required Documents",
+          "type": "array"
+        },
+        "protected_constraints": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Protected Constraints",
+          "type": "array"
+        }
+      },
+      "required": [
+        "requirement_id",
+        "version",
+        "rule_ref",
+        "obligation",
+        "obligor"
+      ],
+      "title": "Requirement",
+      "type": "object"
+    },
+    "ApplicabilityDecision": {
+      "$defs": {
+        "ApplicabilityState": {
+          "description": "適用性狀態",
+          "enum": [
+            "applicable",
+            "not_applicable",
+            "unknown"
+          ],
+          "title": "ApplicabilityState",
+          "type": "string"
+        },
+        "VersionRef": {
+          "additionalProperties": false,
+          "description": "不可變版本參照",
+          "properties": {
+            "id": {
+              "title": "Id",
+              "type": "string"
+            },
+            "version": {
+              "title": "Version",
+              "type": "string"
+            },
+            "sha256": {
+              "title": "Sha256",
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "version",
+            "sha256"
+          ],
+          "title": "VersionRef",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "description": "單一要求適用性判定",
+      "properties": {
+        "requirement_ref": {
+          "$ref": "#/$defs/VersionRef"
+        },
+        "state": {
+          "$ref": "#/$defs/ApplicabilityState"
+        },
+        "reasons": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Reasons",
+          "type": "array"
+        }
+      },
+      "required": [
+        "requirement_ref",
+        "state"
+      ],
+      "title": "ApplicabilityDecision",
+      "type": "object"
+    },
+    "SourceSpan": {
+      "additionalProperties": false,
+      "description": "文字片段在原始文件或區塊的定位",
+      "properties": {
+        "document_id": {
+          "title": "Document Id",
+          "type": "string"
+        },
+        "block_id": {
+          "title": "Block Id",
+          "type": "string"
+        },
+        "start_offset": {
+          "title": "Start Offset",
+          "type": "integer"
+        },
+        "end_offset": {
+          "title": "End Offset",
+          "type": "integer"
+        },
+        "page_number": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Page Number"
+        },
+        "structural_path": {
+          "default": "",
+          "title": "Structural Path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "document_id",
+        "block_id",
+        "start_offset",
+        "end_offset"
+      ],
+      "title": "SourceSpan",
+      "type": "object"
+    },
+    "DocumentSnapshot": {
+      "$defs": {
+        "VersionRef": {
+          "additionalProperties": false,
+          "description": "不可變版本參照",
+          "properties": {
+            "id": {
+              "title": "Id",
+              "type": "string"
+            },
+            "version": {
+              "title": "Version",
+              "type": "string"
+            },
+            "sha256": {
+              "title": "Sha256",
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "version",
+            "sha256"
+          ],
+          "title": "VersionRef",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "description": "不可變文件文字與結構快照",
+      "properties": {
+        "document_id": {
+          "title": "Document Id",
+          "type": "string"
+        },
+        "snapshot_id": {
+          "title": "Snapshot Id",
+          "type": "string"
+        },
+        "original_filename": {
+          "title": "Original Filename",
+          "type": "string"
+        },
+        "content_sha256": {
+          "title": "Content Sha256",
+          "type": "string"
+        },
+        "blocks": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Blocks",
+          "type": "array"
+        },
+        "clauses": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Clauses",
+          "type": "array"
+        },
+        "issues": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Issues",
+          "type": "array"
+        },
+        "manifest": {
+          "additionalProperties": true,
+          "title": "Manifest",
+          "type": "object"
+        },
+        "confirmation_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/VersionRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "document_id",
+        "snapshot_id",
+        "original_filename",
+        "content_sha256"
+      ],
+      "title": "DocumentSnapshot",
+      "type": "object"
+    },
+    "Review": {
+      "$defs": {
+        "CaseFacts": {
+          "additionalProperties": false,
+          "description": "案件背景事實（規格 §3.1）\n\n未知值使用 None 並列於 unknown_fields，不把空值判定為 False。\n金額欄位嚴格禁止二進位浮點數。",
+          "properties": {
+            "procurement_unit": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Procurement Unit"
+            },
+            "procurement_system": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Procurement System"
+            },
+            "procurement_system_confirmed": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Procurement System Confirmed"
+            },
+            "statutory_category": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Statutory Category"
+            },
+            "procurement_families": {
+              "items": {
+                "$ref": "#/$defs/ProcurementFamily"
+              },
+              "title": "Procurement Families",
+              "type": "array"
+            },
+            "service_scope": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Service Scope"
+            },
+            "personal_data_involved": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Personal Data Involved"
+            },
+            "sensitive_data_involved": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Sensitive Data Involved"
+            },
+            "data_flow_cross_border": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Data Flow Cross Border"
+            },
+            "data_locations": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Data Locations",
+              "type": "array"
+            },
+            "remote_access": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Remote Access"
+            },
+            "core_system": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Core System"
+            },
+            "security_level": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Security Level"
+            },
+            "budget_amount": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Budget Amount"
+            },
+            "currency": {
+              "default": "TWD",
+              "title": "Currency",
+              "type": "string"
+            },
+            "period_start": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Period Start"
+            },
+            "period_end": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Period End"
+            },
+            "expected_signing_date": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Expected Signing Date"
+            },
+            "expected_delivery_date": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Expected Delivery Date"
+            },
+            "review_baseline_date": {
+              "format": "date",
+              "title": "Review Baseline Date",
+              "type": "string"
+            },
+            "unknown_fields": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Unknown Fields",
+              "type": "array"
+            }
+          },
+          "required": [
+            "review_baseline_date"
+          ],
+          "title": "CaseFacts",
+          "type": "object"
+        },
+        "ProcurementFamily": {
+          "description": "採購類別情境",
+          "enum": [
+            "services",
+            "cloud",
+            "cots",
+            "development"
+          ],
+          "title": "ProcurementFamily",
+          "type": "string"
+        },
+        "ReviewState": {
+          "description": "審查案件狀態",
+          "enum": [
+            "imported",
+            "needs_input_confirmation",
+            "ready",
+            "reviewing",
+            "draft_ready",
+            "human_review",
+            "approved",
+            "needs_revision",
+            "archived"
+          ],
+          "title": "ReviewState",
+          "type": "string"
+        },
+        "VersionRef": {
+          "additionalProperties": false,
+          "description": "不可變版本參照",
+          "properties": {
+            "id": {
+              "title": "Id",
+              "type": "string"
+            },
+            "version": {
+              "title": "Version",
+              "type": "string"
+            },
+            "sha256": {
+              "title": "Sha256",
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "version",
+            "sha256"
+          ],
+          "title": "VersionRef",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "description": "審查案件契約",
+      "properties": {
+        "case_id": {
+          "title": "Case Id",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "contract_type": {
+          "$ref": "#/$defs/ProcurementFamily"
+        },
+        "contract_version": {
+          "default": "1.0",
+          "title": "Contract Version",
+          "type": "string"
+        },
+        "original_file_hash": {
+          "title": "Original File Hash",
+          "type": "string"
+        },
+        "attachments": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Attachments",
+          "type": "array"
+        },
+        "facts": {
+          "$ref": "#/$defs/CaseFacts"
+        },
+        "sensitivity_level": {
+          "default": "confidential",
+          "title": "Sensitivity Level",
+          "type": "string"
+        },
+        "created_by": {
+          "title": "Created By",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "state": {
+          "$ref": "#/$defs/ReviewState",
+          "default": "imported"
+        },
+        "document_snapshot_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/VersionRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "confirmation_history": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Confirmation History",
+          "type": "array"
+        },
+        "revision": {
+          "default": 1,
+          "title": "Revision",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "case_id",
+        "title",
+        "contract_type",
+        "original_file_hash",
+        "facts",
+        "created_by",
+        "created_at"
+      ],
+      "title": "Review",
+      "type": "object"
+    },
+    "ReviewRun": {
+      "$defs": {
+        "RunState": {
+          "description": "執行管線狀態",
+          "enum": [
+            "planned",
+            "awaiting_approval",
+            "running",
+            "done",
+            "blocked",
+            "failed",
+            "interrupted"
+          ],
+          "title": "RunState",
+          "type": "string"
+        },
+        "VersionRef": {
+          "additionalProperties": false,
+          "description": "不可變版本參照",
+          "properties": {
+            "id": {
+              "title": "Id",
+              "type": "string"
+            },
+            "version": {
+              "title": "Version",
+              "type": "string"
+            },
+            "sha256": {
+              "title": "Sha256",
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "version",
+            "sha256"
+          ],
+          "title": "VersionRef",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "description": "單次審查執行管線記錄",
+      "properties": {
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "case_id": {
+          "title": "Case Id",
+          "type": "string"
+        },
+        "input_version": {
+          "$ref": "#/$defs/VersionRef"
+        },
+        "rule_set_snapshot": {
+          "$ref": "#/$defs/VersionRef"
+        },
+        "case_index_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/VersionRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "engine_version": {
+          "title": "Engine Version",
+          "type": "string"
+        },
+        "ocr_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ocr Version"
+        },
+        "masking_version": {
+          "title": "Masking Version",
+          "type": "string"
+        },
+        "prompt_version": {
+          "title": "Prompt Version",
+          "type": "string"
+        },
+        "schema_version": {
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "provider_id": {
+          "title": "Provider Id",
+          "type": "string"
+        },
+        "model_id": {
+          "title": "Model Id",
+          "type": "string"
+        },
+        "route": {
+          "default": "default",
+          "title": "Route",
+          "type": "string"
+        },
+        "state": {
+          "$ref": "#/$defs/RunState",
+          "default": "planned"
+        },
+        "parent_run_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Parent Run Id"
+        },
+        "stale": {
+          "default": false,
+          "title": "Stale",
+          "type": "boolean"
+        },
+        "started_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Started At"
+        },
+        "finished_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Finished At"
+        },
+        "cost_usd": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cost Usd"
+        },
+        "latency_ms": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Latency Ms"
+        },
+        "attempts": {
+          "default": 0,
+          "title": "Attempts",
+          "type": "integer"
+        },
+        "egress_approval_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/VersionRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "error_message": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error Message"
+        }
+      },
+      "required": [
+        "run_id",
+        "case_id",
+        "input_version",
+        "rule_set_snapshot",
+        "engine_version",
+        "masking_version",
+        "prompt_version",
+        "schema_version",
+        "provider_id",
+        "model_id"
+      ],
+      "title": "ReviewRun",
+      "type": "object"
+    },
+    "ContextBundle": {
+      "$defs": {
+        "SourceSpan": {
+          "additionalProperties": false,
+          "description": "文字片段在原始文件或區塊的定位",
+          "properties": {
+            "document_id": {
+              "title": "Document Id",
+              "type": "string"
+            },
+            "block_id": {
+              "title": "Block Id",
+              "type": "string"
+            },
+            "start_offset": {
+              "title": "Start Offset",
+              "type": "integer"
+            },
+            "end_offset": {
+              "title": "End Offset",
+              "type": "integer"
+            },
+            "page_number": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Page Number"
+            },
+            "structural_path": {
+              "default": "",
+              "title": "Structural Path",
+              "type": "string"
+            }
+          },
+          "required": [
+            "document_id",
+            "block_id",
+            "start_offset",
+            "end_offset"
+          ],
+          "title": "SourceSpan",
+          "type": "object"
+        },
+        "VersionRef": {
+          "additionalProperties": false,
+          "description": "不可變版本參照",
+          "properties": {
+            "id": {
+              "title": "Id",
+              "type": "string"
+            },
+            "version": {
+              "title": "Version",
+              "type": "string"
+            },
+            "sha256": {
+              "title": "Sha256",
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "version",
+            "sha256"
+          ],
+          "title": "VersionRef",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "description": "審查推論上下文組合",
+      "properties": {
+        "requirement_ref": {
+          "$ref": "#/$defs/VersionRef"
+        },
+        "source_spans": {
+          "items": {
+            "$ref": "#/$defs/SourceSpan"
+          },
+          "title": "Source Spans",
+          "type": "array"
+        },
+        "definitions": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Definitions",
+          "type": "object"
+        },
+        "exceptions": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Exceptions",
+          "type": "array"
+        },
+        "citations": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Citations",
+          "type": "array"
+        },
+        "document_retrieval_status": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Document Retrieval Status",
+          "type": "object"
+        },
+        "complete": {
+          "default": true,
+          "title": "Complete",
+          "type": "boolean"
+        },
+        "unknowns": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Unknowns",
+          "type": "array"
+        }
+      },
+      "required": [
+        "requirement_ref"
+      ],
+      "title": "ContextBundle",
+      "type": "object"
+    },
+    "CoverageEntry": {
+      "additionalProperties": false,
+      "description": "覆蓋矩陣項目",
+      "properties": {
+        "item_id": {
+          "title": "Item Id",
+          "type": "string"
+        },
+        "item_type": {
+          "title": "Item Type",
+          "type": "string"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "status": {
+          "title": "Status",
+          "type": "string"
+        },
+        "details": {
+          "default": "",
+          "title": "Details",
+          "type": "string"
+        },
+        "scope": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Scope"
+        }
+      },
+      "required": [
+        "item_id",
+        "item_type",
+        "run_id",
+        "status"
+      ],
+      "title": "CoverageEntry",
+      "type": "object"
+    },
+    "CoverageMatrix": {
+      "$defs": {
+        "CoverageEntry": {
+          "additionalProperties": false,
+          "description": "覆蓋矩陣項目",
+          "properties": {
+            "item_id": {
+              "title": "Item Id",
+              "type": "string"
+            },
+            "item_type": {
+              "title": "Item Type",
+              "type": "string"
+            },
+            "run_id": {
+              "title": "Run Id",
+              "type": "string"
+            },
+            "status": {
+              "title": "Status",
+              "type": "string"
+            },
+            "details": {
+              "default": "",
+              "title": "Details",
+              "type": "string"
+            },
+            "scope": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Scope"
+            }
+          },
+          "required": [
+            "item_id",
+            "item_type",
+            "run_id",
+            "status"
+          ],
+          "title": "CoverageEntry",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "description": "全份覆蓋矩陣：同時列舉條款與適用要求",
+      "properties": {
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "clause_entries": {
+          "items": {
+            "$ref": "#/$defs/CoverageEntry"
+          },
+          "title": "Clause Entries",
+          "type": "array"
+        },
+        "requirement_entries": {
+          "items": {
+            "$ref": "#/$defs/CoverageEntry"
+          },
+          "title": "Requirement Entries",
+          "type": "array"
+        },
+        "unprocessed_clause_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Unprocessed Clause Ids",
+          "type": "array"
+        },
+        "unresolved_requirement_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Unresolved Requirement Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "run_id"
+      ],
+      "title": "CoverageMatrix",
+      "type": "object"
+    },
+    "DetectedSpan": {
+      "$defs": {
+        "SourceSpan": {
+          "additionalProperties": false,
+          "description": "文字片段在原始文件或區塊的定位",
+          "properties": {
+            "document_id": {
+              "title": "Document Id",
+              "type": "string"
+            },
+            "block_id": {
+              "title": "Block Id",
+              "type": "string"
+            },
+            "start_offset": {
+              "title": "Start Offset",
+              "type": "integer"
+            },
+            "end_offset": {
+              "title": "End Offset",
+              "type": "integer"
+            },
+            "page_number": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Page Number"
+            },
+            "structural_path": {
+              "default": "",
+              "title": "Structural Path",
+              "type": "string"
+            }
+          },
+          "required": [
+            "document_id",
+            "block_id",
+            "start_offset",
+            "end_offset"
+          ],
+          "title": "SourceSpan",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "description": "PII 或機敏資訊偵測區間",
+      "properties": {
+        "span_id": {
+          "title": "Span Id",
+          "type": "string"
+        },
+        "span_type": {
+          "title": "Span Type",
+          "type": "string"
+        },
+        "entity_group": {
+          "title": "Entity Group",
+          "type": "string"
+        },
+        "source_span": {
+          "$ref": "#/$defs/SourceSpan"
+        },
+        "original_text": {
+          "title": "Original Text",
+          "type": "string"
+        },
+        "masked_token": {
+          "title": "Masked Token",
+          "type": "string"
+        },
+        "confidence": {
+          "default": 1.0,
+          "title": "Confidence",
+          "type": "number"
+        }
+      },
+      "required": [
+        "span_id",
+        "span_type",
+        "entity_group",
+        "source_span",
+        "original_text",
+        "masked_token"
+      ],
+      "title": "DetectedSpan",
+      "type": "object"
+    },
+    "MaskingSession": {
+      "additionalProperties": false,
+      "description": "本機遮罩會話紀錄",
+      "properties": {
+        "session_id": {
+          "title": "Session Id",
+          "type": "string"
+        },
+        "case_id": {
+          "title": "Case Id",
+          "type": "string"
+        },
+        "detector_version": {
+          "title": "Detector Version",
+          "type": "string"
+        },
+        "manual_tagging_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Manual Tagging Version"
+        },
+        "mapping_vault_ref": {
+          "title": "Mapping Vault Ref",
+          "type": "string"
+        },
+        "outbound_hash": {
+          "title": "Outbound Hash",
+          "type": "string"
+        },
+        "human_reviewed": {
+          "default": false,
+          "title": "Human Reviewed",
+          "type": "boolean"
+        },
+        "roundtrip_ok": {
+          "default": false,
+          "title": "Roundtrip Ok",
+          "type": "boolean"
+        },
+        "blocking_reasons": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Blocking Reasons",
+          "type": "array"
+        },
+        "retention_expire_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Retention Expire At"
+        }
+      },
+      "required": [
+        "session_id",
+        "case_id",
+        "detector_version",
+        "mapping_vault_ref",
+        "outbound_hash"
+      ],
+      "title": "MaskingSession",
+      "type": "object"
+    },
+    "RestorationResult": {
+      "additionalProperties": false,
+      "description": "本機還原結果",
+      "properties": {
+        "text": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Text"
+        },
+        "unknown_tokens": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Unknown Tokens",
+          "type": "array"
+        },
+        "wrong_case_tokens": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Wrong Case Tokens",
+          "type": "array"
+        },
+        "adoptable": {
+          "default": false,
+          "title": "Adoptable",
+          "type": "boolean"
+        }
+      },
+      "title": "RestorationResult",
+      "type": "object"
+    },
+    "OutboundDraft": {
+      "additionalProperties": false,
+      "description": "出站草稿（本機未遮罩組裝物）",
+      "properties": {
+        "draft_id": {
+          "title": "Draft Id",
+          "type": "string"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "plaintext_body": {
+          "title": "Plaintext Body",
+          "type": "string"
+        },
+        "sensitive_token_count": {
+          "default": 0,
+          "title": "Sensitive Token Count",
+          "type": "integer"
+        },
+        "assembled_at": {
+          "format": "date-time",
+          "title": "Assembled At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "draft_id",
+        "run_id",
+        "plaintext_body",
+        "assembled_at"
+      ],
+      "title": "OutboundDraft",
+      "type": "object"
+    },
+    "PreparedRequest": {
+      "$defs": {
+        "VersionRef": {
+          "additionalProperties": false,
+          "description": "不可變版本參照",
+          "properties": {
+            "id": {
+              "title": "Id",
+              "type": "string"
+            },
+            "version": {
+              "title": "Version",
+              "type": "string"
+            },
+            "sha256": {
+              "title": "Sha256",
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "version",
+            "sha256"
+          ],
+          "title": "VersionRef",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "description": "已遮罩出站請求",
+      "properties": {
+        "request_id": {
+          "title": "Request Id",
+          "type": "string"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "endpoint": {
+          "title": "Endpoint",
+          "type": "string"
+        },
+        "model": {
+          "title": "Model",
+          "type": "string"
+        },
+        "body": {
+          "format": "binary",
+          "title": "Body",
+          "type": "string"
+        },
+        "sha256": {
+          "title": "Sha256",
+          "type": "string"
+        },
+        "masking_ref": {
+          "$ref": "#/$defs/VersionRef"
+        },
+        "rule_refs": {
+          "items": {
+            "$ref": "#/$defs/VersionRef"
+          },
+          "title": "Rule Refs",
+          "type": "array"
+        }
+      },
+      "required": [
+        "request_id",
+        "run_id",
+        "endpoint",
+        "model",
+        "body",
+        "sha256",
+        "masking_ref"
+      ],
+      "title": "PreparedRequest",
+      "type": "object"
+    },
+    "EgressApproval": {
+      "additionalProperties": false,
+      "description": "不可變出站核准 artifact",
+      "properties": {
+        "approval_id": {
+          "title": "Approval Id",
+          "type": "string"
+        },
+        "request_id": {
+          "title": "Request Id",
+          "type": "string"
+        },
+        "request_sha256": {
+          "title": "Request Sha256",
+          "type": "string"
+        },
+        "endpoint": {
+          "title": "Endpoint",
+          "type": "string"
+        },
+        "model": {
+          "title": "Model",
+          "type": "string"
+        },
+        "approved_by": {
+          "title": "Approved By",
+          "type": "string"
+        },
+        "approved_at": {
+          "format": "date-time",
+          "title": "Approved At",
+          "type": "string"
+        },
+        "scope": {
+          "title": "Scope",
+          "type": "string"
+        },
+        "max_resend_count": {
+          "default": 1,
+          "title": "Max Resend Count",
+          "type": "integer"
+        },
+        "current_send_count": {
+          "default": 0,
+          "title": "Current Send Count",
+          "type": "integer"
+        },
+        "revocation_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Revocation Reason"
+        }
+      },
+      "required": [
+        "approval_id",
+        "request_id",
+        "request_sha256",
+        "endpoint",
+        "model",
+        "approved_by",
+        "approved_at",
+        "scope"
+      ],
+      "title": "EgressApproval",
+      "type": "object"
+    },
+    "ProviderReply": {
+      "additionalProperties": false,
+      "description": "模型供應商原始受控回應紀錄",
+      "properties": {
+        "reply_id": {
+          "title": "Reply Id",
+          "type": "string"
+        },
+        "request_id": {
+          "title": "Request Id",
+          "type": "string"
+        },
+        "artifact_ref": {
+          "title": "Artifact Ref",
+          "type": "string"
+        },
+        "usage": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "Usage",
+          "type": "object"
+        },
+        "finish_reason": {
+          "default": "stop",
+          "title": "Finish Reason",
+          "type": "string"
+        },
+        "latency_ms": {
+          "default": 0,
+          "title": "Latency Ms",
+          "type": "integer"
+        },
+        "provider_request_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Provider Request Id"
+        }
+      },
+      "required": [
+        "reply_id",
+        "request_id",
+        "artifact_ref"
+      ],
+      "title": "ProviderReply",
+      "type": "object"
+    },
+    "Finding": {
+      "$defs": {
+        "ResultEnum": {
+          "description": "審查結果狀態",
+          "enum": [
+            "compliant",
+            "concern",
+            "missing",
+            "needs_confirmation",
+            "not_applicable",
+            "uncovered"
+          ],
+          "title": "ResultEnum",
+          "type": "string"
+        },
+        "RiskLevel": {
+          "description": "風險分級",
+          "enum": [
+            "critical",
+            "high",
+            "medium",
+            "low",
+            "info"
+          ],
+          "title": "RiskLevel",
+          "type": "string"
+        },
+        "SourceNature": {
+          "description": "來源性質",
+          "enum": [
+            "applicable_law",
+            "institution_policy",
+            "standard_template",
+            "guideline_recommendation"
+          ],
+          "title": "SourceNature",
+          "type": "string"
+        },
+        "SourceSpan": {
+          "additionalProperties": false,
+          "description": "文字片段在原始文件或區塊的定位",
+          "properties": {
+            "document_id": {
+              "title": "Document Id",
+              "type": "string"
+            },
+            "block_id": {
+              "title": "Block Id",
+              "type": "string"
+            },
+            "start_offset": {
+              "title": "Start Offset",
+              "type": "integer"
+            },
+            "end_offset": {
+              "title": "End Offset",
+              "type": "integer"
+            },
+            "page_number": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Page Number"
+            },
+            "structural_path": {
+              "default": "",
+              "title": "Structural Path",
+              "type": "string"
+            }
+          },
+          "required": [
+            "document_id",
+            "block_id",
+            "start_offset",
+            "end_offset"
+          ],
+          "title": "SourceSpan",
+          "type": "object"
+        },
+        "VersionRef": {
+          "additionalProperties": false,
+          "description": "不可變版本參照",
+          "properties": {
+            "id": {
+              "title": "Id",
+              "type": "string"
+            },
+            "version": {
+              "title": "Version",
+              "type": "string"
+            },
+            "sha256": {
+              "title": "Sha256",
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "version",
+            "sha256"
+          ],
+          "title": "VersionRef",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "description": "審查發現契約\n\n安全規則：若結果為 missing 且無具體條款 ID，必填查核範圍 review_scope。",
+      "properties": {
+        "finding_id": {
+          "title": "Finding Id",
+          "type": "string"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "clause_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Clause Ids",
+          "type": "array"
+        },
+        "requirement_id": {
+          "title": "Requirement Id",
+          "type": "string"
+        },
+        "result": {
+          "$ref": "#/$defs/ResultEnum"
+        },
+        "risk": {
+          "$ref": "#/$defs/RiskLevel"
+        },
+        "evidence": {
+          "items": {
+            "$ref": "#/$defs/SourceSpan"
+          },
+          "title": "Evidence",
+          "type": "array"
+        },
+        "rule_refs": {
+          "items": {
+            "$ref": "#/$defs/VersionRef"
+          },
+          "title": "Rule Refs",
+          "type": "array"
+        },
+        "case_refs": {
+          "items": {
+            "$ref": "#/$defs/VersionRef"
+          },
+          "title": "Case Refs",
+          "type": "array"
+        },
+        "reason": {
+          "title": "Reason",
+          "type": "string"
+        },
+        "unknowns": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Unknowns",
+          "type": "array"
+        },
+        "suggested_action": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Suggested Action"
+        },
+        "suggested_clause": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Suggested Clause"
+        },
+        "validation_status": {
+          "default": "pending",
+          "title": "Validation Status",
+          "type": "string"
+        },
+        "human_status": {
+          "default": "unreviewed",
+          "title": "Human Status",
+          "type": "string"
+        },
+        "conclusion_nature": {
+          "items": {
+            "$ref": "#/$defs/SourceNature"
+          },
+          "title": "Conclusion Nature",
+          "type": "array"
+        },
+        "review_scope": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Review Scope"
+        }
+      },
+      "required": [
+        "finding_id",
+        "run_id",
+        "requirement_id",
+        "result",
+        "risk",
+        "reason"
+      ],
+      "title": "Finding",
+      "type": "object"
+    },
+    "ValidationReport": {
+      "additionalProperties": false,
+      "description": "校驗報告：分層檢查結構、來源與實質",
+      "properties": {
+        "report_id": {
+          "title": "Report Id",
+          "type": "string"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "structure_ok": {
+          "default": true,
+          "title": "Structure Ok",
+          "type": "boolean"
+        },
+        "source_ok": {
+          "default": true,
+          "title": "Source Ok",
+          "type": "boolean"
+        },
+        "substance_ok": {
+          "default": true,
+          "title": "Substance Ok",
+          "type": "boolean"
+        },
+        "issues": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Issues",
+          "type": "array"
+        },
+        "checked_at": {
+          "format": "date-time",
+          "title": "Checked At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "report_id",
+        "run_id",
+        "checked_at"
+      ],
+      "title": "ValidationReport",
+      "type": "object"
+    },
+    "SuggestedChange": {
+      "$defs": {
+        "VersionRef": {
+          "additionalProperties": false,
+          "description": "不可變版本參照",
+          "properties": {
+            "id": {
+              "title": "Id",
+              "type": "string"
+            },
+            "version": {
+              "title": "Version",
+              "type": "string"
+            },
+            "sha256": {
+              "title": "Sha256",
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "version",
+            "sha256"
+          ],
+          "title": "VersionRef",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "description": "條款修改建議",
+      "properties": {
+        "change_id": {
+          "title": "Change Id",
+          "type": "string"
+        },
+        "finding_id": {
+          "title": "Finding Id",
+          "type": "string"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "purpose": {
+          "title": "Purpose",
+          "type": "string"
+        },
+        "basis_rule_refs": {
+          "items": {
+            "$ref": "#/$defs/VersionRef"
+          },
+          "title": "Basis Rule Refs",
+          "type": "array"
+        },
+        "proposed_text": {
+          "title": "Proposed Text",
+          "type": "string"
+        },
+        "affected_clause_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Affected Clause Ids",
+          "type": "array"
+        },
+        "protected_field_modifications": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Protected Field Modifications",
+          "type": "array"
+        },
+        "fill_in_placeholders": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Fill In Placeholders",
+          "type": "array"
+        }
+      },
+      "required": [
+        "change_id",
+        "finding_id",
+        "run_id",
+        "purpose",
+        "proposed_text"
+      ],
+      "title": "SuggestedChange",
+      "type": "object"
+    },
+    "HumanDecision": {
+      "$defs": {
+        "HumanDecisionAction": {
+          "description": "人工決定動作",
+          "enum": [
+            "adopt",
+            "modify",
+            "reject"
+          ],
+          "title": "HumanDecisionAction",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "description": "人工決定",
+      "properties": {
+        "decision_id": {
+          "title": "Decision Id",
+          "type": "string"
+        },
+        "finding_id": {
+          "title": "Finding Id",
+          "type": "string"
+        },
+        "action": {
+          "$ref": "#/$defs/HumanDecisionAction"
+        },
+        "final_text": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Final Text"
+        },
+        "reason": {
+          "title": "Reason",
+          "type": "string"
+        },
+        "decided_by": {
+          "title": "Decided By",
+          "type": "string"
+        },
+        "decided_at": {
+          "format": "date-time",
+          "title": "Decided At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "decision_id",
+        "finding_id",
+        "action",
+        "reason",
+        "decided_by",
+        "decided_at"
+      ],
+      "title": "HumanDecision",
+      "type": "object"
+    },
+    "Feedback": {
+      "$defs": {
+        "HumanDecision": {
+          "additionalProperties": false,
+          "description": "人工決定",
+          "properties": {
+            "decision_id": {
+              "title": "Decision Id",
+              "type": "string"
+            },
+            "finding_id": {
+              "title": "Finding Id",
+              "type": "string"
+            },
+            "action": {
+              "$ref": "#/$defs/HumanDecisionAction"
+            },
+            "final_text": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Final Text"
+            },
+            "reason": {
+              "title": "Reason",
+              "type": "string"
+            },
+            "decided_by": {
+              "title": "Decided By",
+              "type": "string"
+            },
+            "decided_at": {
+              "format": "date-time",
+              "title": "Decided At",
+              "type": "string"
+            }
+          },
+          "required": [
+            "decision_id",
+            "finding_id",
+            "action",
+            "reason",
+            "decided_by",
+            "decided_at"
+          ],
+          "title": "HumanDecision",
+          "type": "object"
+        },
+        "HumanDecisionAction": {
+          "description": "人工決定動作",
+          "enum": [
+            "adopt",
+            "modify",
+            "reject"
+          ],
+          "title": "HumanDecisionAction",
+          "type": "string"
+        },
+        "ResultEnum": {
+          "description": "審查結果狀態",
+          "enum": [
+            "compliant",
+            "concern",
+            "missing",
+            "needs_confirmation",
+            "not_applicable",
+            "uncovered"
+          ],
+          "title": "ResultEnum",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "description": "審查回饋紀錄",
+      "properties": {
+        "feedback_id": {
+          "title": "Feedback Id",
+          "type": "string"
+        },
+        "finding_id": {
+          "title": "Finding Id",
+          "type": "string"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "original_result": {
+          "$ref": "#/$defs/ResultEnum"
+        },
+        "human_decision": {
+          "$ref": "#/$defs/HumanDecision"
+        },
+        "exception_scope": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Exception Scope"
+        },
+        "approved_for_case_base": {
+          "default": false,
+          "title": "Approved For Case Base",
+          "type": "boolean"
+        },
+        "operator": {
+          "title": "Operator",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "version": {
+          "default": 1,
+          "title": "Version",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "feedback_id",
+        "finding_id",
+        "run_id",
+        "original_result",
+        "human_decision",
+        "operator",
+        "created_at"
+      ],
+      "title": "Feedback",
+      "type": "object"
+    },
+    "ReviewReport": {
+      "$defs": {
+        "CoverageEntry": {
+          "additionalProperties": false,
+          "description": "覆蓋矩陣項目",
+          "properties": {
+            "item_id": {
+              "title": "Item Id",
+              "type": "string"
+            },
+            "item_type": {
+              "title": "Item Type",
+              "type": "string"
+            },
+            "run_id": {
+              "title": "Run Id",
+              "type": "string"
+            },
+            "status": {
+              "title": "Status",
+              "type": "string"
+            },
+            "details": {
+              "default": "",
+              "title": "Details",
+              "type": "string"
+            },
+            "scope": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Scope"
+            }
+          },
+          "required": [
+            "item_id",
+            "item_type",
+            "run_id",
+            "status"
+          ],
+          "title": "CoverageEntry",
+          "type": "object"
+        },
+        "CoverageMatrix": {
+          "additionalProperties": false,
+          "description": "全份覆蓋矩陣：同時列舉條款與適用要求",
+          "properties": {
+            "run_id": {
+              "title": "Run Id",
+              "type": "string"
+            },
+            "clause_entries": {
+              "items": {
+                "$ref": "#/$defs/CoverageEntry"
+              },
+              "title": "Clause Entries",
+              "type": "array"
+            },
+            "requirement_entries": {
+              "items": {
+                "$ref": "#/$defs/CoverageEntry"
+              },
+              "title": "Requirement Entries",
+              "type": "array"
+            },
+            "unprocessed_clause_ids": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Unprocessed Clause Ids",
+              "type": "array"
+            },
+            "unresolved_requirement_ids": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Unresolved Requirement Ids",
+              "type": "array"
+            }
+          },
+          "required": [
+            "run_id"
+          ],
+          "title": "CoverageMatrix",
+          "type": "object"
+        },
+        "Finding": {
+          "additionalProperties": false,
+          "description": "審查發現契約\n\n安全規則：若結果為 missing 且無具體條款 ID，必填查核範圍 review_scope。",
+          "properties": {
+            "finding_id": {
+              "title": "Finding Id",
+              "type": "string"
+            },
+            "run_id": {
+              "title": "Run Id",
+              "type": "string"
+            },
+            "clause_ids": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Clause Ids",
+              "type": "array"
+            },
+            "requirement_id": {
+              "title": "Requirement Id",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/ResultEnum"
+            },
+            "risk": {
+              "$ref": "#/$defs/RiskLevel"
+            },
+            "evidence": {
+              "items": {
+                "$ref": "#/$defs/SourceSpan"
+              },
+              "title": "Evidence",
+              "type": "array"
+            },
+            "rule_refs": {
+              "items": {
+                "$ref": "#/$defs/VersionRef"
+              },
+              "title": "Rule Refs",
+              "type": "array"
+            },
+            "case_refs": {
+              "items": {
+                "$ref": "#/$defs/VersionRef"
+              },
+              "title": "Case Refs",
+              "type": "array"
+            },
+            "reason": {
+              "title": "Reason",
+              "type": "string"
+            },
+            "unknowns": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Unknowns",
+              "type": "array"
+            },
+            "suggested_action": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Suggested Action"
+            },
+            "suggested_clause": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Suggested Clause"
+            },
+            "validation_status": {
+              "default": "pending",
+              "title": "Validation Status",
+              "type": "string"
+            },
+            "human_status": {
+              "default": "unreviewed",
+              "title": "Human Status",
+              "type": "string"
+            },
+            "conclusion_nature": {
+              "items": {
+                "$ref": "#/$defs/SourceNature"
+              },
+              "title": "Conclusion Nature",
+              "type": "array"
+            },
+            "review_scope": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Review Scope"
+            }
+          },
+          "required": [
+            "finding_id",
+            "run_id",
+            "requirement_id",
+            "result",
+            "risk",
+            "reason"
+          ],
+          "title": "Finding",
+          "type": "object"
+        },
+        "HumanDecision": {
+          "additionalProperties": false,
+          "description": "人工決定",
+          "properties": {
+            "decision_id": {
+              "title": "Decision Id",
+              "type": "string"
+            },
+            "finding_id": {
+              "title": "Finding Id",
+              "type": "string"
+            },
+            "action": {
+              "$ref": "#/$defs/HumanDecisionAction"
+            },
+            "final_text": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Final Text"
+            },
+            "reason": {
+              "title": "Reason",
+              "type": "string"
+            },
+            "decided_by": {
+              "title": "Decided By",
+              "type": "string"
+            },
+            "decided_at": {
+              "format": "date-time",
+              "title": "Decided At",
+              "type": "string"
+            }
+          },
+          "required": [
+            "decision_id",
+            "finding_id",
+            "action",
+            "reason",
+            "decided_by",
+            "decided_at"
+          ],
+          "title": "HumanDecision",
+          "type": "object"
+        },
+        "HumanDecisionAction": {
+          "description": "人工決定動作",
+          "enum": [
+            "adopt",
+            "modify",
+            "reject"
+          ],
+          "title": "HumanDecisionAction",
+          "type": "string"
+        },
+        "ResultEnum": {
+          "description": "審查結果狀態",
+          "enum": [
+            "compliant",
+            "concern",
+            "missing",
+            "needs_confirmation",
+            "not_applicable",
+            "uncovered"
+          ],
+          "title": "ResultEnum",
+          "type": "string"
+        },
+        "RiskLevel": {
+          "description": "風險分級",
+          "enum": [
+            "critical",
+            "high",
+            "medium",
+            "low",
+            "info"
+          ],
+          "title": "RiskLevel",
+          "type": "string"
+        },
+        "SourceNature": {
+          "description": "來源性質",
+          "enum": [
+            "applicable_law",
+            "institution_policy",
+            "standard_template",
+            "guideline_recommendation"
+          ],
+          "title": "SourceNature",
+          "type": "string"
+        },
+        "SourceSpan": {
+          "additionalProperties": false,
+          "description": "文字片段在原始文件或區塊的定位",
+          "properties": {
+            "document_id": {
+              "title": "Document Id",
+              "type": "string"
+            },
+            "block_id": {
+              "title": "Block Id",
+              "type": "string"
+            },
+            "start_offset": {
+              "title": "Start Offset",
+              "type": "integer"
+            },
+            "end_offset": {
+              "title": "End Offset",
+              "type": "integer"
+            },
+            "page_number": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Page Number"
+            },
+            "structural_path": {
+              "default": "",
+              "title": "Structural Path",
+              "type": "string"
+            }
+          },
+          "required": [
+            "document_id",
+            "block_id",
+            "start_offset",
+            "end_offset"
+          ],
+          "title": "SourceSpan",
+          "type": "object"
+        },
+        "VersionRef": {
+          "additionalProperties": false,
+          "description": "不可變版本參照",
+          "properties": {
+            "id": {
+              "title": "Id",
+              "type": "string"
+            },
+            "version": {
+              "title": "Version",
+              "type": "string"
+            },
+            "sha256": {
+              "title": "Sha256",
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "version",
+            "sha256"
+          ],
+          "title": "VersionRef",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "description": "最終審查報告契約",
+      "properties": {
+        "report_id": {
+          "title": "Report Id",
+          "type": "string"
+        },
+        "case_id": {
+          "title": "Case Id",
+          "type": "string"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "case_version": {
+          "title": "Case Version",
+          "type": "string"
+        },
+        "sensitivity_level": {
+          "title": "Sensitivity Level",
+          "type": "string"
+        },
+        "source_manifest": {
+          "items": {
+            "$ref": "#/$defs/VersionRef"
+          },
+          "title": "Source Manifest",
+          "type": "array"
+        },
+        "findings": {
+          "items": {
+            "$ref": "#/$defs/Finding"
+          },
+          "title": "Findings",
+          "type": "array"
+        },
+        "coverage": {
+          "$ref": "#/$defs/CoverageMatrix"
+        },
+        "unresolved_issues": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Unresolved Issues",
+          "type": "array"
+        },
+        "human_decisions": {
+          "items": {
+            "$ref": "#/$defs/HumanDecision"
+          },
+          "title": "Human Decisions",
+          "type": "array"
+        },
+        "generated_at": {
+          "format": "date-time",
+          "title": "Generated At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "report_id",
+        "case_id",
+        "run_id",
+        "case_version",
+        "sensitivity_level",
+        "coverage",
+        "generated_at"
+      ],
+      "title": "ReviewReport",
+      "type": "object"
+    },
+    "ExportPaths": {
+      "$defs": {
+        "RedactionMode": {
+          "description": "匯出遮罩模式",
+          "enum": [
+            "masked",
+            "plaintext"
+          ],
+          "title": "RedactionMode",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "description": "匯出路徑與模式",
+      "properties": {
+        "markdown_path": {
+          "title": "Markdown Path",
+          "type": "string"
+        },
+        "json_path": {
+          "title": "Json Path",
+          "type": "string"
+        },
+        "redaction_mode": {
+          "$ref": "#/$defs/RedactionMode",
+          "default": "masked"
+        }
+      },
+      "required": [
+        "markdown_path",
+        "json_path"
+      ],
+      "title": "ExportPaths",
+      "type": "object"
+    },
+    "GateReport": {
+      "additionalProperties": false,
+      "description": "安全檢核門報告",
+      "properties": {
+        "ok": {
+          "title": "Ok",
+          "type": "boolean"
+        },
+        "operation": {
+          "title": "Operation",
+          "type": "string"
+        },
+        "issues": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Issues",
+          "type": "array"
+        },
+        "checked_at": {
+          "format": "date-time",
+          "title": "Checked At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "ok",
+        "operation",
+        "checked_at"
+      ],
+      "title": "GateReport",
+      "type": "object"
+    },
+    "EvaluationReport": {
+      "additionalProperties": false,
+      "description": "評測報告",
+      "properties": {
+        "eval_id": {
+          "title": "Eval Id",
+          "type": "string"
+        },
+        "timestamp": {
+          "format": "date-time",
+          "title": "Timestamp",
+          "type": "string"
+        },
+        "metrics": {
+          "additionalProperties": true,
+          "title": "Metrics",
+          "type": "object"
+        },
+        "denominators": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "Denominators",
+          "type": "object"
+        },
+        "blockers": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Blockers",
+          "type": "array"
+        }
+      },
+      "required": [
+        "eval_id",
+        "timestamp"
+      ],
+      "title": "EvaluationReport",
+      "type": "object"
+    },
+    "PurgePlan": {
+      "additionalProperties": false,
+      "description": "安全刪除計畫",
+      "properties": {
+        "case_id": {
+          "title": "Case Id",
+          "type": "string"
+        },
+        "purge_targets": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Purge Targets",
+          "type": "array"
+        },
+        "retention_expired": {
+          "title": "Retention Expired",
+          "type": "boolean"
+        },
+        "approved_by": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Approved By"
+        },
+        "planned_at": {
+          "format": "date-time",
+          "title": "Planned At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "case_id",
+        "retention_expired",
+        "planned_at"
+      ],
+      "title": "PurgePlan",
+      "type": "object"
+    },
+    "ProviderConfig": {
+      "$defs": {
+        "VersionRef": {
+          "additionalProperties": false,
+          "description": "不可變版本參照",
+          "properties": {
+            "id": {
+              "title": "Id",
+              "type": "string"
+            },
+            "version": {
+              "title": "Version",
+              "type": "string"
+            },
+            "sha256": {
+              "title": "Sha256",
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "version",
+            "sha256"
+          ],
+          "title": "VersionRef",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "description": "模型供應商設定",
+      "properties": {
+        "provider": {
+          "title": "Provider",
+          "type": "string"
+        },
+        "endpoint": {
+          "title": "Endpoint",
+          "type": "string"
+        },
+        "model": {
+          "title": "Model",
+          "type": "string"
+        },
+        "credential_ref": {
+          "title": "Credential Ref",
+          "type": "string"
+        },
+        "rate_limits": {
+          "additionalProperties": true,
+          "title": "Rate Limits",
+          "type": "object"
+        },
+        "price_version": {
+          "title": "Price Version",
+          "type": "string"
+        },
+        "approval_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/VersionRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "provider",
+        "endpoint",
+        "model",
+        "credential_ref",
+        "price_version"
+      ],
+      "title": "ProviderConfig",
+      "type": "object"
+    },
+    "AuditEvent": {
+      "additionalProperties": false,
+      "description": "安全稽核事件",
+      "properties": {
+        "event_id": {
+          "title": "Event Id",
+          "type": "string"
+        },
+        "timestamp": {
+          "format": "date-time",
+          "title": "Timestamp",
+          "type": "string"
+        },
+        "operator": {
+          "title": "Operator",
+          "type": "string"
+        },
+        "action": {
+          "title": "Action",
+          "type": "string"
+        },
+        "target_type": {
+          "title": "Target Type",
+          "type": "string"
+        },
+        "target_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Target Version"
+        },
+        "result": {
+          "title": "Result",
+          "type": "string"
+        },
+        "evidence_hashes": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Evidence Hashes",
+          "type": "array"
+        }
+      },
+      "required": [
+        "event_id",
+        "timestamp",
+        "operator",
+        "action",
+        "target_type",
+        "result"
+      ],
+      "title": "AuditEvent",
+      "type": "object"
+    }
+  }
+}

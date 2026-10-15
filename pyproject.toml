@@ -1,0 +1,29 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "procurement-review"
+version = "0.1.0"
+description = "中央研究院資訊採購合約資安審查助手"
+requires-python = ">=3.13"
+dependencies = [
+    "pydantic>=2.7.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+    "ruff>=0.4.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/procurement_review"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
