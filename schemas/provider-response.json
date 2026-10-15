@@ -1,0 +1,167 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ProviderReviewResponse",
+  "description": "Schema for LLM provider review batch response",
+  "type": "object",
+  "properties": {
+    "run_id": {
+      "type": "string",
+      "description": "Identifier of the review run"
+    },
+    "batch_id": {
+      "type": "string",
+      "description": "Identifier of the review batch"
+    },
+    "findings": {
+      "type": "array",
+      "description": "List of review findings produced by the provider",
+      "items": {
+        "type": "object",
+        "properties": {
+          "finding_id": {
+            "type": "string",
+            "description": "Optional unique finding identifier"
+          },
+          "requirement_id": {
+            "type": "string",
+            "description": "The security requirement ID being evaluated"
+          },
+          "clause_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "IDs of the contract clauses cited"
+          },
+          "result": {
+            "type": "string",
+            "enum": [
+              "compliant",
+              "concern",
+              "missing",
+              "needs_confirmation",
+              "not_applicable",
+              "uncovered"
+            ],
+            "description": "Review outcome status"
+          },
+          "risk": {
+            "type": "string",
+            "enum": [
+              "critical",
+              "high",
+              "medium",
+              "low",
+              "info"
+            ],
+            "description": "Assessed risk level"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Substantive rationale for the finding"
+          },
+          "citations": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Short verbatim quotations from source text"
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "document_id": {
+                  "type": "string"
+                },
+                "block_id": {
+                  "type": "string"
+                },
+                "start_offset": {
+                  "type": "integer"
+                },
+                "end_offset": {
+                  "type": "integer"
+                },
+                "page_number": {
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "structural_path": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "document_id",
+                "block_id",
+                "start_offset",
+                "end_offset"
+              ],
+              "additionalProperties": false
+            },
+            "description": "Precise source span references"
+          },
+          "unknowns": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Unknown or unverified items"
+          },
+          "suggested_action": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Recommended remedial action"
+          },
+          "suggested_clause": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Proposed contract clause language"
+          },
+          "review_scope": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Scope of review when finding is missing"
+          }
+        },
+        "required": [
+          "requirement_id",
+          "result",
+          "risk",
+          "reason"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "findings"
+  ],
+  "additionalProperties": false
+}
