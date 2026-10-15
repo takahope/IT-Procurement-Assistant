@@ -106,7 +106,7 @@ def approve(
 
 
 def get_approval(approval_id: str, repo: Repository) -> EgressApproval:
-    """取得出站核准記錄，並疊加 SQLite 即時中繼狀態。"""
+    """取得出站核准記錄，以 Vault Artifact 為單一可信來源並校驗防篡改。"""
     _init_egress_tables(repo)
     with repo._conn() as conn:
         cursor = conn.cursor()
@@ -140,15 +140,29 @@ def get_approval(approval_id: str, repo: Repository) -> EgressApproval:
     run = repo.get_run(run_id)
     raw_data = repo.artifacts.get(case_id=run.case_id, artifact_id=artifact_ref)
     appr = EgressApproval.model_validate_json(raw_data)
-    return appr.model_copy(
-        update={
-            "endpoint": db_endpoint,
-            "model": db_model,
-            "request_sha256": db_sha256,
-            "current_send_count": db_send_count,
-            "revocation_reason": db_revocation,
-        }
-    )
+
+    appr_model = getattr(appr, "model_id", getattr(appr, "model", None))
+    # 嚴格以 Vault Artifact 為單一真理來源：比較 SQLite 與 Vault Artifact 是否一致
+    if (
+        str(appr.approval_id) != approval_id
+        or appr.request_sha256 != db_sha256
+        or appr.endpoint != db_endpoint
+        or appr_model != db_model
+    ):
+        raise DomainError(
+            "APPROVAL_TAMPERED",
+            f"Egress approval '{approval_id}' metadata in SQLite does not match encrypted vault artifact",
+        )
+
+    # 檢查撤銷原因一致性
+    if db_revocation != appr.revocation_reason:
+        raise DomainError(
+            "APPROVAL_TAMPERED",
+            f"Egress approval '{approval_id}' revocation reason mismatch between SQLite and vault",
+        )
+
+    # current_send_count 疊加 SQLite 併發控制計數器
+    return appr.model_copy(update={"current_send_count": db_send_count})
 
 
 def revoke_approval(
@@ -165,24 +179,34 @@ def revoke_approval(
     if run is None:
         with repo._conn() as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT run_id FROM prepared_requests WHERE request_id = ?", (appr.request_id,))
+            cursor.execute("SELECT run_id FROM prepared_requests WHERE request_id = ?", (str(appr.request_id),))
             r_row = cursor.fetchone()
             if r_row:
                 run = repo.get_run(r_row["run_id"])
 
-    if run is not None:
-        repo.artifacts.put(
-            case_id=run.case_id,
-            kind="egress_approval",
-            data=updated.model_dump_json().encode("utf-8"),
+    if run is None:
+        raise DomainError(
+            "RUN_NOT_FOUND",
+            f"Run for request '{appr.request_id}' not found",
         )
+
+    new_artifact_id = repo.artifacts.put(
+        case_id=run.case_id,
+        kind="egress_approval",
+        data=updated.model_dump_json().encode("utf-8"),
+    )
 
     with repo._conn() as conn:
         conn.execute("BEGIN IMMEDIATE;")
         conn.execute(
-            "UPDATE egress_approvals SET revocation_reason = ? WHERE approval_id = ?",
-            (reason, approval_id),
+            """
+            UPDATE egress_approvals
+            SET revocation_reason = ?, artifact_ref = ?
+            WHERE approval_id = ?
+            """,
+            (reason, new_artifact_id, approval_id),
         )
         conn.commit()
 
     return updated
+

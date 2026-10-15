@@ -1,3 +1,4 @@
+import os
 import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor
@@ -6,6 +7,7 @@ from pathlib import Path
 
 import httpx
 import pytest
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 from procurement_review.domain.enums import ProcurementFamily
 from procurement_review.domain.errors import DomainError
@@ -14,6 +16,7 @@ from procurement_review.domain.models import (
     MaskingSession,
     OutboundDraft,
     PreparedRequest,
+    ProviderConfig,
     Review,
     VersionRef,
 )
@@ -24,7 +27,7 @@ from procurement_review.masking.detector import RuleBasedDetector
 from procurement_review.providers.mock import MockProviderAdapter
 from procurement_review.storage.repository import Repository
 from procurement_review.storage.secrets import FakeSecretStore
-from procurement_review.storage.vault import ArtifactStore
+from procurement_review.storage.vault import ArtifactStore, pack_envelope
 
 
 @pytest.fixture
@@ -359,7 +362,23 @@ def test_missing_or_revoked_approval_yields_zero_transmissions(
     assert captured_requests == []
 
     # 2. Revoked approval
+    with repo._conn() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT artifact_ref FROM egress_approvals WHERE approval_id = ?", (approval.approval_id,))
+        initial_ref = cursor.fetchone()["artifact_ref"]
+
     revoke_approval(approval.approval_id, reason="User cancelled", repo=repo)
+
+    with repo._conn() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT artifact_ref, revocation_reason FROM egress_approvals WHERE approval_id = ?",
+            (approval.approval_id,),
+        )
+        row = cursor.fetchone()
+        assert row["revocation_reason"] == "User cancelled"
+        assert row["artifact_ref"] != initial_ref
+
     with pytest.raises(DomainError) as exc_info:
         dispatch(
             prepared.request_id,
@@ -484,9 +503,12 @@ def test_successful_dispatch_and_digest_match(
     assert auth_header is not None
     assert "sk-mock-secret-key-1234567890abcdef" in auth_header
 
-    # 3. Provider reply returned
+    # 3. Provider reply returned with real artifact_ref bound
     assert reply.request_id == prepared.request_id
     assert reply.finish_reason == "stop"
+    assert reply.artifact_ref is not None
+    stored_reply_data = repo.artifacts.get(case_id=review.case_id, artifact_id=reply.artifact_ref)
+    assert b"chatcmpl-test-ok" in stored_reply_data
 
 
 def test_duplicate_submit_and_uncertain_delivery(
@@ -651,17 +673,85 @@ def test_redirect_and_malicious_endpoint_blocked(
     assert exc_info.value.code == "REDIRECT_FORBIDDEN"
 
     # 2. Malicious endpoint test: userinfo in URL
-    with repo._conn() as conn:
-        conn.execute(
-            "UPDATE prepared_requests SET endpoint = 'https://admin:secret@api.local/v1' WHERE request_id = ?",
-            (prepared.request_id,),
-        )
-        conn.execute(
-            "UPDATE egress_approvals SET endpoint = 'https://admin:secret@api.local/v1' WHERE approval_id = ?",
-            (approval.approval_id,),
-        )
+    userinfo_config = adapter.config.model_copy(update={"endpoint": "https://admin:secret@api.local/v1"})
+    userinfo_adapter = MockProviderAdapter(config=userinfo_config)
+    prepared_userinfo = prepare_egress(run_id, draft, session, detector, userinfo_adapter, repo)
+    approval_userinfo = approve(prepared_userinfo, actor="reviewer-alice", max_attempts=1, repo=repo)
+
+    captured_requests2: list[httpx.Request] = []
+
+    def userinfo_handler(request: httpx.Request) -> httpx.Response:
+        captured_requests2.append(request)
+        return httpx.Response(200, json={"choices": [{"message": {"content": "{}"}}]})
+
+    transport2 = httpx.MockTransport(userinfo_handler)
 
     with pytest.raises(DomainError) as exc_info2:
+        dispatch(
+            prepared_userinfo.request_id,
+            approval_userinfo.approval_id,
+            repo,
+            transport=transport2,
+            secrets=secret_store,
+            adapter=userinfo_adapter,
+        )
+    assert exc_info2.value.code == "INVALID_ENDPOINT"
+    assert "userinfo" in exc_info2.value.safe_message
+    assert captured_requests2 == []
+
+
+def test_body_tampering_one_byte_and_vault_tamper_yields_zero_transmissions(
+    repo: Repository,
+    detector: RuleBasedDetector,
+    adapter: MockProviderAdapter,
+    secret_store: FakeSecretStore,
+):
+    review, run_id = make_review_and_run(repo)
+    draft = OutboundDraft(
+        draft_id=str(uuid.uuid4()),
+        run_id=run_id,
+        plaintext_body="完整機密條款審查A",
+        sensitive_token_count=0,
+        assembled_at=datetime.now(UTC),
+    )
+    session = MaskingSession(
+        session_id=str(uuid.uuid4()),
+        case_id=review.case_id,
+        detector_version=detector.version,
+        mapping_vault_ref="vault://masking",
+        outbound_hash="",
+    )
+    prepared = prepare_egress(run_id, draft, session, detector, adapter, repo)
+    approval = approve(prepared, actor="reviewer-alice", max_attempts=1, repo=repo)
+
+    captured_requests: list[httpx.Request] = []
+
+    def mock_handler(request: httpx.Request) -> httpx.Response:
+        captured_requests.append(request)
+        return httpx.Response(200, json={"choices": [{"message": {"content": "{}"}}]})
+
+    transport = httpx.MockTransport(mock_handler)
+
+    # 1. 測試 body 改一字：直接在 Vault 中修改 payload bytes（body 末尾改 1 byte，維持 sha256 不變）
+    with repo._conn() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT artifact_ref FROM prepared_requests WHERE request_id = ?", (prepared.request_id,))
+        artifact_ref = cursor.fetchone()["artifact_ref"]
+
+    raw_bytes = repo.artifacts.get(case_id=review.case_id, artifact_id=artifact_ref)
+    req_obj = PreparedRequest.model_validate_json(raw_bytes)
+    # 變更 body 的最後 1 個 byte
+    tampered_body = req_obj.body[:-1] + (b"Y" if req_obj.body[-1:] != b"Y" else b"Z")
+    tampered_req = req_obj.model_copy(update={"body": tampered_body})
+
+    target_file = repo.artifacts.root / review.case_id / f"{artifact_ref}.enc"
+    nonce = os.urandom(12)
+    aad = f"{review.case_id}:prepared_request".encode()
+    aesgcm = AESGCM(repo.artifacts.master_key)
+    ciphertext = aesgcm.encrypt(nonce, tampered_req.model_dump_json().encode("utf-8"), aad)
+    target_file.write_bytes(pack_envelope(case_id=review.case_id, kind="prepared_request", nonce=nonce, ciphertext=ciphertext))
+
+    with pytest.raises(DomainError) as exc_info:
         dispatch(
             prepared.request_id,
             approval.approval_id,
@@ -670,4 +760,134 @@ def test_redirect_and_malicious_endpoint_blocked(
             secrets=secret_store,
             adapter=adapter,
         )
-    assert exc_info2.value.code == "INVALID_ENDPOINT"
+    assert exc_info.value.code == "REQUEST_TAMPERED"
+    assert captured_requests == []
+
+    # 2. 測試 approval 在 SQLite 或 Vault 遭篡改（例如 SQLite 端點被竄改）：拋出 APPROVAL_TAMPERED 且零傳輸
+    draft2 = OutboundDraft(
+        draft_id=str(uuid.uuid4()),
+        run_id=run_id,
+        plaintext_body="合約草稿第二份",
+        sensitive_token_count=0,
+        assembled_at=datetime.now(UTC),
+    )
+    prep2 = prepare_egress(run_id, draft2, session, detector, adapter, repo)
+    appr2 = approve(prep2, actor="reviewer-alice", max_attempts=1, repo=repo)
+
+    with repo._conn() as conn:
+        conn.execute(
+            "UPDATE egress_approvals SET endpoint = 'https://tampered-sqlite-endpoint.com' WHERE approval_id = ?",
+            (appr2.approval_id,),
+        )
+
+    with pytest.raises(DomainError) as exc_info2:
+        dispatch(
+            prep2.request_id,
+            appr2.approval_id,
+            repo,
+            transport=transport,
+            secrets=secret_store,
+            adapter=adapter,
+        )
+    assert exc_info2.value.code == "APPROVAL_TAMPERED"
+    assert captured_requests == []
+
+
+def test_endpoint_query_parameters_rejection(
+    repo: Repository,
+    detector: RuleBasedDetector,
+    secret_store: FakeSecretStore,
+):
+    review, run_id = make_review_and_run(repo)
+    draft = OutboundDraft(
+        draft_id=str(uuid.uuid4()),
+        run_id=run_id,
+        plaintext_body="端點 query 測試",
+        sensitive_token_count=0,
+        assembled_at=datetime.now(UTC),
+    )
+    session = MaskingSession(
+        session_id=str(uuid.uuid4()),
+        case_id=review.case_id,
+        detector_version=detector.version,
+        mapping_vault_ref="vault://masking",
+        outbound_hash="",
+    )
+    query_config = ProviderConfig(
+        provider="mock",
+        endpoint="https://api.example.com/v1?secret=123",
+        model="mock-model",
+        credential_ref="mock_api_key",
+        price_version="2026-10-15",
+    )
+    query_adapter = MockProviderAdapter(config=query_config)
+    prepared = prepare_egress(run_id, draft, session, detector, query_adapter, repo)
+    approval = approve(prepared, actor="reviewer-alice", max_attempts=1, repo=repo)
+
+    captured_requests: list[httpx.Request] = []
+
+    def mock_handler(request: httpx.Request) -> httpx.Response:
+        captured_requests.append(request)
+        return httpx.Response(200, json={"choices": [{"message": {"content": "{}"}}]})
+
+    transport = httpx.MockTransport(mock_handler)
+
+    with pytest.raises(DomainError) as exc_info:
+        dispatch(
+            prepared.request_id,
+            approval.approval_id,
+            repo,
+            transport=transport,
+            secrets=secret_store,
+            adapter=query_adapter,
+        )
+    assert exc_info.value.code == "INVALID_ENDPOINT"
+    assert "query" in exc_info.value.safe_message.lower()
+    assert captured_requests == []
+
+
+def test_http_429_rate_limiting(
+    repo: Repository,
+    detector: RuleBasedDetector,
+    adapter: MockProviderAdapter,
+    secret_store: FakeSecretStore,
+):
+    review, run_id = make_review_and_run(repo)
+    draft = OutboundDraft(
+        draft_id=str(uuid.uuid4()),
+        run_id=run_id,
+        plaintext_body="429 速率限制測試",
+        sensitive_token_count=0,
+        assembled_at=datetime.now(UTC),
+    )
+    session = MaskingSession(
+        session_id=str(uuid.uuid4()),
+        case_id=review.case_id,
+        detector_version=detector.version,
+        mapping_vault_ref="vault://masking",
+        outbound_hash="",
+    )
+    prepared = prepare_egress(run_id, draft, session, detector, adapter, repo)
+    approval = approve(prepared, actor="reviewer-alice", max_attempts=1, repo=repo)
+
+    captured_requests: list[httpx.Request] = []
+
+    def rate_limit_handler(request: httpx.Request) -> httpx.Response:
+        captured_requests.append(request)
+        return httpx.Response(429, json={"error": {"message": "Rate limit reached"}})
+
+    transport = httpx.MockTransport(rate_limit_handler)
+
+    with pytest.raises(DomainError) as exc_info:
+        dispatch(
+            prepared.request_id,
+            approval.approval_id,
+            repo,
+            transport=transport,
+            secrets=secret_store,
+            adapter=adapter,
+        )
+    assert exc_info.value.code == "RATE_LIMITED"
+    assert len(captured_requests) == 1
+    assert get_delivery_state(prepared.request_id, repo) == "failed"
+

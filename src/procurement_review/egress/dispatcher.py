@@ -289,7 +289,7 @@ def dispatch(
     _update_dispatch_state(dispatch_id, request_id, "delivered", None, repo)
 
     # 11. 將原始受控回應落盤至 ArtifactStore
-    repo.artifacts.put(
+    artifact_id = repo.artifacts.put(
         case_id=run.case_id,
         kind="provider_reply",
         data=response.content,
@@ -297,4 +297,5 @@ def dispatch(
 
     # 12. Adapter 解碼為 ProviderReply（嚴禁回應工具要求觸發任何網路或程式碼）
     reply = effective_adapter.decode(response.content, request_id=prepared.request_id)
+    reply = reply.model_copy(update={"artifact_ref": artifact_id})
     return reply

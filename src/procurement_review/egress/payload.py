@@ -210,7 +210,7 @@ def prepare_egress(
 
 
 def get_prepared_request(request_id: str, repo: Repository) -> PreparedRequest:
-    """取得已遮罩之出站請求，並疊加 SQLite 即時中繼狀態。"""
+    """取得已遮罩之出站請求，以 Vault Artifact 為單一可信來源並校驗防篡改。"""
     _init_egress_tables(repo)
     with repo._conn() as conn:
         cursor = conn.cursor()
@@ -237,11 +237,33 @@ def get_prepared_request(request_id: str, repo: Repository) -> PreparedRequest:
     run = repo.get_run(run_id)
     raw_data = repo.artifacts.get(case_id=run.case_id, artifact_id=artifact_ref)
     req = PreparedRequest.model_validate_json(raw_data)
-    # 疊加資料庫之即時數值（防範資料庫紀錄與 artifact 不一致之篡改行為）
-    return req.model_copy(
-        update={
-            "endpoint": db_endpoint,
-            "model": db_model,
-            "sha256": db_sha256,
-        }
+
+    # 嚴格以 Vault Artifact 為單一真理來源：比較 SQLite 與 Vault Artifact 是否一致
+    req_model = getattr(req, "model_id", getattr(req, "model", None))
+    if (
+        str(req.request_id) != request_id
+        or req.sha256 != db_sha256
+        or req.endpoint != db_endpoint
+        or req_model != db_model
+    ):
+        raise DomainError(
+            "REQUEST_TAMPERED",
+            f"Prepared request '{request_id}' metadata in SQLite does not match encrypted vault artifact",
+        )
+
+    # 檢驗 Vault Artifact 本身摘要完整性，防範 Vault body 直接遭篡改
+    expected_digest = compute_egress_digest(
+        body=req.body,
+        endpoint=req.endpoint,
+        model=req.model,
+        masking_ref=req.masking_ref,
+        rule_refs=req.rule_refs,
     )
+    if req.sha256 != expected_digest:
+        raise DomainError(
+            "REQUEST_TAMPERED",
+            f"Prepared request '{request_id}' payload digest mismatch; vault artifact tampered",
+        )
+
+    return req
+
