@@ -12,8 +12,11 @@ from procurement_review.domain.errors import DomainError
 from procurement_review.domain.models import (
     Feedback,
     Finding,
+    Requirement,
     Review,
     ReviewRun,
+    Rule,
+    SourceReference,
     VersionRef,
 )
 from procurement_review.storage.vault import ArtifactStore
@@ -76,24 +79,20 @@ class Repository:
                 );
                 """
             )
+            migrations_dir = Path(__file__).parent / "migrations"
+            migration_files = sorted(migrations_dir.glob("*.sql"))
             cursor = conn.cursor()
-            cursor.execute(
-                "SELECT version FROM schema_migrations WHERE version = ?",
-                ("001_initial.sql",),
-            )
-            if cursor.fetchone() is None:
-                migration_file = Path(__file__).parent / "migrations" / "001_initial.sql"
-                if not migration_file.exists():
-                    raise DomainError(
-                        "MIGRATION_NOT_FOUND",
-                        f"Initial migration not found at {migration_file}",
+            cursor.execute("SELECT version FROM schema_migrations")
+            applied = {row[0] for row in cursor.fetchall()}
+
+            for m_file in migration_files:
+                if m_file.name not in applied:
+                    sql = m_file.read_text(encoding="utf-8")
+                    conn.executescript(sql)
+                    conn.execute(
+                        "INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)",
+                        (m_file.name, datetime.now(UTC).isoformat()),
                     )
-                sql = migration_file.read_text(encoding="utf-8")
-                conn.executescript(sql)
-                conn.execute(
-                    "INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)",
-                    ("001_initial.sql", datetime.now(UTC).isoformat()),
-                )
 
     def save_review(
         self,
@@ -613,3 +612,219 @@ class Repository:
             )
             conn.commit()
             return value
+
+    def save_source(self, source: SourceReference) -> None:
+        """儲存法規或內規來源參照至受控加密庫與 SQLite 索引。"""
+        now_iso = datetime.now(UTC).isoformat()
+        payload = source.model_dump_json().encode("utf-8")
+        artifact_id = self.artifacts.put(
+            case_id=source.source_id,
+            kind="source_data",
+            data=payload,
+        )
+        with self._conn() as conn:
+            conn.execute("BEGIN IMMEDIATE;")
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT INTO sources (
+                    source_id, kind, title, issuer, version, verified_at, verified_by,
+                    content_hash, artifact_ref, created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(source_id) DO UPDATE SET
+                    kind = excluded.kind,
+                    title = excluded.title,
+                    issuer = excluded.issuer,
+                    version = excluded.version,
+                    verified_at = excluded.verified_at,
+                    verified_by = excluded.verified_by,
+                    content_hash = excluded.content_hash,
+                    artifact_ref = excluded.artifact_ref,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    source.source_id,
+                    source.kind.value,
+                    source.title,
+                    source.issuer,
+                    source.version,
+                    source.verified_at.isoformat() if source.verified_at else None,
+                    source.verified_by,
+                    source.content_hash,
+                    artifact_id,
+                    now_iso,
+                    now_iso,
+                ),
+            )
+            conn.commit()
+
+    def get_source(self, source_id: str) -> SourceReference:
+        """自儲存庫讀取來源參照。"""
+        with self._conn() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT artifact_ref FROM sources WHERE source_id = ?",
+                (source_id,),
+            )
+            row = cursor.fetchone()
+            if row is None:
+                raise DomainError("SOURCE_NOT_FOUND", f"Source '{source_id}' not found")
+            artifact_ref = row["artifact_ref"]
+
+        raw_data = self.artifacts.get(case_id=source_id, artifact_id=artifact_ref)
+        return SourceReference.model_validate_json(raw_data)
+
+    def save_rule(self, rule: Rule) -> None:
+        """儲存規則定義至受控加密庫與 SQLite 索引。"""
+        now_iso = datetime.now(UTC).isoformat()
+        payload = rule.model_dump_json().encode("utf-8")
+        artifact_id = self.artifacts.put(
+            case_id=rule.rule_id,
+            kind="rule_data",
+            data=payload,
+        )
+        with self._conn() as conn:
+            conn.execute("BEGIN IMMEDIATE;")
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT INTO rules (
+                    rule_id, version, status, category, title,
+                    approved_by, approved_at, effective_from, effective_to,
+                    artifact_ref, created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(rule_id, version) DO UPDATE SET
+                    status = excluded.status,
+                    category = excluded.category,
+                    title = excluded.title,
+                    approved_by = excluded.approved_by,
+                    approved_at = excluded.approved_at,
+                    effective_from = excluded.effective_from,
+                    effective_to = excluded.effective_to,
+                    artifact_ref = excluded.artifact_ref,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    rule.rule_id,
+                    rule.version,
+                    rule.status.value,
+                    rule.category.value,
+                    rule.title,
+                    rule.approved_by,
+                    rule.approved_at.isoformat() if rule.approved_at else None,
+                    rule.effective_from.isoformat() if rule.effective_from else None,
+                    rule.effective_to.isoformat() if rule.effective_to else None,
+                    artifact_id,
+                    now_iso,
+                    now_iso,
+                ),
+            )
+            conn.commit()
+
+    def get_rule(self, rule_id: str, version: str | None = None) -> Rule:
+        """自儲存庫讀取指定規則。若未給定 version，回傳最新一筆。"""
+        with self._conn() as conn:
+            cursor = conn.cursor()
+            if version is None:
+                cursor.execute(
+                    """
+                    SELECT artifact_ref, version FROM rules
+                    WHERE rule_id = ?
+                    ORDER BY updated_at DESC LIMIT 1
+                    """,
+                    (rule_id,),
+                )
+            else:
+                cursor.execute(
+                    "SELECT artifact_ref FROM rules WHERE rule_id = ? AND version = ?",
+                    (rule_id, version),
+                )
+            row = cursor.fetchone()
+            if row is None:
+                ver_str = f" version {version}" if version else ""
+                raise DomainError("RULE_NOT_FOUND", f"Rule '{rule_id}'{ver_str} not found")
+            artifact_ref = row["artifact_ref"]
+
+        raw_data = self.artifacts.get(case_id=rule_id, artifact_id=artifact_ref)
+        return Rule.model_validate_json(raw_data)
+
+    def save_requirement(self, requirement: Requirement) -> None:
+        """儲存單一要求契約至受控加密庫與 SQLite 索引。"""
+        now_iso = datetime.now(UTC).isoformat()
+        payload = requirement.model_dump_json().encode("utf-8")
+        artifact_id = self.artifacts.put(
+            case_id=requirement.requirement_id,
+            kind="requirement_data",
+            data=payload,
+        )
+        with self._conn() as conn:
+            conn.execute("BEGIN IMMEDIATE;")
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT INTO requirements (
+                    requirement_id, version, rule_id, rule_version,
+                    artifact_ref, created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(requirement_id) DO UPDATE SET
+                    version = excluded.version,
+                    rule_id = excluded.rule_id,
+                    rule_version = excluded.rule_version,
+                    artifact_ref = excluded.artifact_ref,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    requirement.requirement_id,
+                    requirement.version,
+                    requirement.rule_ref.id,
+                    requirement.rule_ref.version,
+                    artifact_id,
+                    now_iso,
+                    now_iso,
+                ),
+            )
+            conn.commit()
+
+    def get_requirement(self, requirement_id: str) -> Requirement:
+        """讀取單一要求契約。"""
+        with self._conn() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT artifact_ref FROM requirements WHERE requirement_id = ?",
+                (requirement_id,),
+            )
+            row = cursor.fetchone()
+            if row is None:
+                raise DomainError(
+                    "REQUIREMENT_NOT_FOUND",
+                    f"Requirement '{requirement_id}' not found",
+                )
+            artifact_ref = row["artifact_ref"]
+
+        raw_data = self.artifacts.get(case_id=requirement_id, artifact_id=artifact_ref)
+        return Requirement.model_validate_json(raw_data)
+
+    def get_requirements_for_rule(self, rule_id: str, rule_version: str) -> list[Requirement]:
+        """查詢特定規則版本所屬之所有要求。"""
+        with self._conn() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT requirement_id, artifact_ref FROM requirements
+                WHERE rule_id = ? AND rule_version = ?
+                """,
+                (rule_id, rule_version),
+            )
+            rows = cursor.fetchall()
+
+        results: list[Requirement] = []
+        for row in rows:
+            req_id = row["requirement_id"]
+            art_ref = row["artifact_ref"]
+            data = self.artifacts.get(case_id=req_id, artifact_id=art_ref)
+            results.append(Requirement.model_validate_json(data))
+        return results
+
