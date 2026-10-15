@@ -1,0 +1,54 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.venv/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Testing & Tool caches
+.pytest_cache/
+.coverage
+htmlcov/
+.ruff_cache/
+
+# Local Environment & Secrets
+.env
+.env.*
+*.key
+*.pem
+
+# Local Databases & Private Artifacts
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+data/
+vault/
+export/
+private/
+
+# Reference documents and raw materials (per plan line 123)
+*.doc
+*.docx
+套裝軟體勞務維護採購作業指南.md
+.memsearch/
+
+# OS artifacts
+.DS_Store
+Thumbs.db
