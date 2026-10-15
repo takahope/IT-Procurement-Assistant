@@ -8,6 +8,8 @@ version = "0.1.0"
 description = "中央研究院資訊採購合約資安審查助手"
 requires-python = ">=3.13"
 dependencies = [
+    "cryptography>=42.0.0",
+    "keyring>=24.0.0",
     "pydantic>=2.7.0",
 ]
 
