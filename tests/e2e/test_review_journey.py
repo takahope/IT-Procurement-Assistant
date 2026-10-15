@@ -109,6 +109,7 @@ def test_complete_review_journey(e2e_env):
     # 檢查 documents 頁面呈現，確認包含待確認或正常區塊
     resp_doc_page = client.get(f"/cases/{case_id}/documents")
     assert resp_doc_page.status_code == 200
+    assert "待確認" in resp_doc_page.text
 
     # 4. 人工文字確認 (Confirm text)
     # 取出第一個 block 進行人工校正與確認
@@ -206,6 +207,22 @@ def test_complete_review_journey(e2e_env):
     run_data = resp_run.json()
     run_id = run_data["run_id"]
     assert run_id is not None
+    assert run_data.get("status") == "running"
+    task_id = run_data.get("task_id")
+    assert task_id is not None
+
+    # 等待背景任務執行完成
+    import time
+
+    for _ in range(50):
+        t_resp = client.get(f"/api/tasks/{task_id}")
+        assert t_resp.status_code == 200
+        t_data = t_resp.json()
+        if t_data.get("status") == "completed":
+            break
+        time.sleep(0.05)
+    else:
+        pytest.fail("Background review task did not complete in time")
 
     # 檢視審查狀態與 findings
     resp_findings = client.get(f"/api/cases/{case_id}/review/findings")
@@ -362,6 +379,31 @@ def test_rules_page_and_lifecycle_management(e2e_env):
     assert released.status == RuleStatus.ACTIVE
     assert released.approved_by == "local_reviewer"
 
+    # 測試透過 release-btn 格式之 payload ({ "rule_id": rule_id, "version": ver }) 核准發布
+    pending_rule_btn = Rule(
+        rule_id=str(uuid.uuid4()),
+        version="1.0",
+        status=RuleStatus.PENDING_APPROVAL,
+        category=ProcurementFamily.SERVICES,
+        title="按鈕發布測試規則",
+        requirement_text="系統應每年進行弱點掃描。",
+        severity=RiskLevel.MEDIUM,
+        mandatory=False,
+        source_refs=[
+            VersionRef(id=source.source_id, version=source.version, sha256=source.content_hash)
+        ],
+    )
+    repo.save_rule(pending_rule_btn)
+
+    resp_rel_btn = client.post(
+        "/api/rules/release",
+        headers=headers,
+        json={"rule_id": pending_rule_btn.rule_id, "version": pending_rule_btn.version},
+    )
+    assert resp_rel_btn.status_code == 200
+    released_btn = repo.get_rule(pending_rule_btn.rule_id, pending_rule_btn.version)
+    assert released_btn.status == RuleStatus.ACTIVE
+
     # 4. 建立使用該規則之 Case & Run
     r_hash = compute_rule_hash(released)
     rule_ref = VersionRef(id=released.rule_id, version=released.version, sha256=r_hash)
@@ -440,3 +482,72 @@ def test_server_restart_recovers_cleanly_and_marks_interrupted(tmp_path: Path):
     restored_run = repo.get_run(run.run_id)
     assert restored_run.state == RunState.INTERRUPTED
     assert restored_run.invalidation_reason == "SERVER_RESTARTED"
+
+
+def test_document_snapshot_restored_from_vault_after_restart(e2e_env):
+    """驗證重啟伺服器或清空記憶體快取後，文件快照與條款能自 Vault 恢復載入並正常呈現。"""
+    from procurement_review.web.routes import _document_snapshots
+
+    client: TestClient = e2e_env["client"]
+    token: str = e2e_env["bootstrap_token"]
+
+    # 1. Bootstrap session
+    resp = client.post("/api/auth/bootstrap", json={"token": token})
+    assert resp.status_code == 200
+    csrf_token = resp.json()["csrf_token"]
+    headers = {"X-CSRF-Token": csrf_token}
+
+    # 2. 建立案件
+    case_resp = client.post(
+        "/api/cases",
+        headers=headers,
+        json={
+            "title": "快照持久化與重啟恢復測試案",
+            "contract_type": "services",
+            "facts": {
+                "procurement_unit": "計算中心",
+                "review_baseline_date": "2026-10-15",
+                "procurement_families": ["services"],
+            },
+        },
+    )
+    assert case_resp.status_code == 200
+    case_id = case_resp.json()["case_id"]
+
+    # 3. 上傳文件
+    sample_doc_path = Path("tests/fixtures/synthetic/documents/normal.docx")
+    assert sample_doc_path.exists()
+    with open(sample_doc_path, "rb") as f:
+        resp_upload = client.post(
+            f"/api/cases/{case_id}/documents/upload",
+            headers=headers,
+            files={
+                "file": (
+                    sample_doc_path.name,
+                    f,
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                )
+            },
+        )
+    assert resp_upload.status_code == 200
+    assert case_id in _document_snapshots
+
+    # 4. 模擬伺服器重啟：清空記憶體中的 _document_snapshots 快取
+    _document_snapshots.clear()
+    assert case_id not in _document_snapshots
+
+    # 5. 存取 documents 頁面，驗證從 Vault 解密還原 snapshot 與條款
+    resp_doc_page = client.get(f"/cases/{case_id}/documents")
+    assert resp_doc_page.status_code == 200
+    assert "待確認" in resp_doc_page.text
+    assert "區塊 ID:" in resp_doc_page.text
+    assert "文件結構與區塊清單" in resp_doc_page.text
+
+    # 6. 驗證快取已被重建，且 API 能正常取得還原後的文件區塊
+    assert case_id in _document_snapshots
+    resp_doc_api = client.get(f"/api/cases/{case_id}/documents", headers=headers)
+    assert resp_doc_api.status_code == 200
+    doc_json = resp_doc_api.json()
+    assert len(doc_json["blocks"]) > 0
+    assert doc_json["content_sha256"] is not None
+

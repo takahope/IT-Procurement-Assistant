@@ -1,3 +1,4 @@
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -51,6 +52,7 @@ def create_app(policy: RuntimePolicy, repo: Repository) -> FastAPI:
     app.state.bootstrap_token = bootstrap_token
     app.state.policy = policy
     app.state.repo = repo
+    app.state.executor = ThreadPoolExecutor(max_workers=4)
 
     # 4. 加入安全中介軟體 (Host, Origin, CSRF, CSP)
     app.add_middleware(SecurityMiddleware, session_manager=session_manager)

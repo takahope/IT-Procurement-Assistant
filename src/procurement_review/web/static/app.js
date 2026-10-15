@@ -70,13 +70,43 @@ window.addEventListener('DOMContentLoaded', async () => {
     });
 
     // 3. 注音 / 中文輸入法 Composition 防護 (Enter 鍵不誤送出)
+    window.isComposing = false;
+    window.addEventListener('compositionstart', () => { window.isComposing = true; });
+    window.addEventListener('compositionend', () => { window.isComposing = false; });
+
     document.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && (e.isComposing || e.keyCode === 229)) {
-            // 中文輸入法選字中，阻擋預設送出行為
+        const isComposing = Boolean(e.isComposing || window.isComposing || e.keyCode === 229);
+        if (isComposing && (e.key === 'Enter' || e.keyCode === 13 || e.keyCode === 229)) {
+            // 中文輸入法選字中，同時阻擋預設送出行為與事件向上冒泡
             e.stopPropagation();
+            e.preventDefault();
         }
     }, true);
 });
+
+// 任務輪詢輔助工具
+async function pollTask(taskId, options = {}) {
+    const interval = options.interval || 500;
+    const onProgress = options.onProgress || (() => {});
+    return new Promise((resolve, reject) => {
+        const timer = setInterval(async () => {
+            try {
+                const task = await apiRequest(`/api/tasks/${taskId}`);
+                onProgress(task);
+                if (task.status === 'completed') {
+                    clearInterval(timer);
+                    resolve(task);
+                } else if (task.status === 'failed') {
+                    clearInterval(timer);
+                    reject(new Error(task.error || task.message || 'Task failed'));
+                }
+            } catch (err) {
+                clearInterval(timer);
+                reject(err);
+            }
+        }, interval);
+    });
+}
 
 // 通用 Fetch 封裝，自動注入 CSRF Token
 async function apiRequest(url, options = {}) {
@@ -97,3 +127,4 @@ async function apiRequest(url, options = {}) {
     }
     return await res.json();
 }
+

@@ -89,21 +89,35 @@
 {% block scripts %}
 <script>
 document.getElementById('start-review-btn').addEventListener('click', async () => {
+    const btn = document.getElementById('start-review-btn');
     try {
-        const btn = document.getElementById('start-review-btn');
         btn.disabled = true;
-        btn.textContent = '審查執行中...';
-        await apiRequest('/api/cases/{{ case_id }}/review/start', {
+        btn.textContent = '審查排程中...';
+        const res = await apiRequest('/api/cases/{{ case_id }}/review/start', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({})
         });
-        alert('審查執行完畢！');
-        window.location.reload();
+
+        if (res.status === 'running' && res.task_id) {
+            btn.textContent = '審查執行中 (0%)...';
+            await pollTask(res.task_id, {
+                interval: 500,
+                onProgress: (task) => {
+                    const pct = task.progress || 0;
+                    btn.textContent = `審查執行中 (${pct}%)... ${task.message || ''}`;
+                }
+            });
+            alert('審查執行完畢！');
+            window.location.reload();
+        } else {
+            alert('審查執行完畢！');
+            window.location.reload();
+        }
     } catch (err) {
         alert('執行審查失敗: ' + err.message);
-        document.getElementById('start-review-btn').disabled = false;
-        document.getElementById('start-review-btn').textContent = '開始／重新執行審查管線';
+        btn.disabled = false;
+        btn.textContent = '開始／重新執行審查管線';
     }
 });
 

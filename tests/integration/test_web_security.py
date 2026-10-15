@@ -257,3 +257,29 @@ def test_model_html_and_external_images_are_inert(test_env):
 
     # 核心斷言：完全無任何外部 browser request
     assert external_browser_requests == []
+
+
+def test_ipv6_loopback_host_accepted_and_evil_rejected(test_env):
+    """支援 [::1]:8765, [::1], ::1 等 IPv6 loopback 格式，非法 IPv6 回傳 403。"""
+    client = test_env["client"]
+    token = test_env["bootstrap_token"]
+    resp = client.post("/api/auth/bootstrap", json={"token": token})
+    assert resp.status_code == 200
+
+    # 合法 IPv6 loopback
+    resp_v6_port = client.get("/cases", headers={"Host": "[::1]:8765"})
+    assert resp_v6_port.status_code == 200
+
+    resp_v6 = client.get("/cases", headers={"Host": "[::1]"})
+    assert resp_v6.status_code == 200
+
+    resp_v6_plain = client.get("/cases", headers={"Host": "::1"})
+    assert resp_v6_plain.status_code == 200
+
+    # 非 loopback IPv6 / 惡意主機 -> 403
+    resp_v6_evil = client.get("/cases", headers={"Host": "[::2]:8765"})
+    assert resp_v6_evil.status_code == 403
+
+    resp_v6_evil2 = client.get("/cases", headers={"Host": "[2001:db8::1]:80"})
+    assert resp_v6_evil2.status_code == 403
+

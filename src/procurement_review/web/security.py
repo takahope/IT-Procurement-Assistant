@@ -75,9 +75,17 @@ class SessionManager:
 def is_loopback_host(host_header: str | None) -> bool:
     if not host_header:
         return False
-    # Host 可能帶有 port，例如 localhost:8765
-    host_clean = host_header.split(":", 1)[0].strip()
-    return host_clean in LOOPBACK_HOSTS
+    host_clean = host_header.strip()
+    if host_clean.startswith("["):
+        # Bracketed IPv6 host, e.g. [::1] or [::1]:8765
+        if "]" in host_clean:
+            host_clean = host_clean[1 : host_clean.index("]")]
+        else:
+            return False
+    elif host_clean.count(":") == 1:
+        # Host with single colon port, e.g. localhost:8765 or 127.0.0.1:8765
+        host_clean = host_clean.split(":", 1)[0].strip()
+    return host_clean in LOOPBACK_HOSTS or f"[{host_clean}]" in LOOPBACK_HOSTS
 
 
 def is_loopback_origin(origin_header: str | None) -> bool:
@@ -87,7 +95,7 @@ def is_loopback_origin(origin_header: str | None) -> bool:
     hostname = parsed.hostname
     if not hostname:
         return False
-    return hostname in LOOPBACK_HOSTS
+    return hostname in LOOPBACK_HOSTS or f"[{hostname}]" in LOOPBACK_HOSTS
 
 
 class SecurityMiddleware(BaseHTTPMiddleware):

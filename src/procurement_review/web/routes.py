@@ -1,6 +1,7 @@
 import json
 import secrets
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -22,6 +23,7 @@ from procurement_review.domain.models import (
     CaseFacts,
     ContextBundle,
     DetectedSpan,
+    DocumentSnapshot,
     HumanDecision,
     MaskingSession,
     OutboundDraft,
@@ -70,6 +72,45 @@ def _get_repo(request: Request) -> Repository:
 
 def _get_policy(request: Request) -> RuntimePolicy:
     return request.app.state.policy
+
+
+def _get_executor(request: Request) -> ThreadPoolExecutor:
+    if hasattr(request.app.state, "executor"):
+        return request.app.state.executor
+    executor = ThreadPoolExecutor(max_workers=4)
+    request.app.state.executor = executor
+    return executor
+
+
+def _get_document_snapshot(
+    case_id: str, repo: Repository, review: Review | None = None
+) -> DocumentSnapshot | None:
+    snapshot = _document_snapshots.get(case_id)
+    if snapshot is not None:
+        return snapshot
+
+    if review is None:
+        try:
+            review = repo.get_review(case_id)
+        except DomainError:
+            return None
+
+    if review and review.document_snapshot_ref:
+        ref = review.document_snapshot_ref
+        art_id = (
+            ref.id
+            if isinstance(ref, VersionRef)
+            else getattr(ref, "id", None) or (ref.get("id") if isinstance(ref, dict) else str(ref))
+        )
+        if art_id:
+            try:
+                data = repo.artifacts.get(case_id, art_id)
+                snapshot = DocumentSnapshot.model_validate_json(data)
+                _document_snapshots[case_id] = snapshot
+                return snapshot
+            except (DomainError, ValueError, KeyError, OSError):
+                return None
+    return None
 
 
 def _mask_text(
@@ -195,7 +236,7 @@ async def page_documents(case_id: str, request: Request) -> Response:
         review = repo.get_review(case_id)
     except DomainError:
         raise HTTPException(status_code=404, detail="Case not found")
-    snapshot = _document_snapshots.get(case_id)
+    snapshot = _get_document_snapshot(case_id, repo, review)
     return templates.TemplateResponse(
         request=request,
         name="documents.html",
@@ -418,7 +459,8 @@ async def api_upload_document(
 @router.get("/api/cases/{case_id}/documents")
 async def api_get_document(case_id: str, request: Request) -> dict[str, Any]:
     get_authenticated_session(request)
-    snapshot = _document_snapshots.get(case_id)
+    repo = _get_repo(request)
+    snapshot = _get_document_snapshot(case_id, repo)
     if not snapshot:
         raise HTTPException(status_code=404, detail="No document snapshot found for case")
     return snapshot.model_dump(mode="json")
@@ -431,7 +473,7 @@ async def api_confirm_document_text(case_id: str, request: Request) -> dict[str,
     body = await request.json()
     corrected_blocks = body.get("corrected_blocks", [])
 
-    snapshot = _document_snapshots.get(case_id)
+    snapshot = _get_document_snapshot(case_id, repo)
     if not snapshot:
         raise HTTPException(status_code=404, detail="Document snapshot not found")
 
@@ -533,7 +575,7 @@ async def api_get_egress_draft(case_id: str, request: Request) -> dict[str, Any]
         rule_ref = VersionRef(id=str(uuid.uuid4()), version="1.0", sha256="abc" * 21 + "1")
         run = repo.create_run(review_id=case_id, rule_refs=[rule_ref])
 
-    snapshot = _document_snapshots.get(case_id)
+    snapshot = _get_document_snapshot(case_id, repo)
     if snapshot and snapshot.blocks:
         body_text = "\n".join(b.raw_text for b in snapshot.blocks)
     else:
@@ -597,6 +639,7 @@ async def api_dispatch_egress(case_id: str, request: Request) -> dict[str, Any]:
 async def api_start_review(case_id: str, request: Request) -> dict[str, Any]:
     get_current_operator(request)
     repo = _get_repo(request)
+    executor = _get_executor(request)
 
     _ = repo.get_review(case_id)
     active_rules = repo.list_rules(status=RuleStatus.ACTIVE)
@@ -626,52 +669,82 @@ async def api_start_review(case_id: str, request: Request) -> dict[str, Any]:
     running_run = run.model_copy(update={"state": RunState.RUNNING})
     repo.save_run(running_run)
 
-    # 建立審查 context
-    contexts: list[ContextBundle] = []
-    for r in active_rules:
-        cb = ContextBundle(
-            requirement_ref=VersionRef(
-                id=r.rule_id, version=r.version, sha256=compute_rule_hash(r)
-            ),
-        )
-        contexts.append(cb)
-
-    _ = plan_review(running_run, contexts, repo=repo)
-
-    # 執行 Mock 回覆與接收
-    findings_list = []
-    for r in active_rules:
-        findings_list.append(
-            {
-                "requirement_id": r.rule_id,
-                "clause_ids": ["clause-10"],
-                "result": "concern",
-                "risk": "high",
-                "reason": f"未落實資安稽核要求: {r.requirement_text}",
-                "suggested_action": "修正條款以符合資安規範",
-                "suggested_clause": "廠商應配合每年定期資安稽核，並於30日內提交改善報告，違約金為 [待填金額]。",
-                "review_scope": "全份合約",
-            }
-        )
-
-    response_payload = {
+    task_id = str(uuid.uuid4())
+    _background_tasks[task_id] = {
+        "task_id": task_id,
         "run_id": run.run_id,
-        "findings": findings_list,
+        "status": "running",
+        "progress": 0,
+        "message": "審查管線啟動中...",
+        "error": None,
     }
-    raw_bytes = json.dumps(response_payload, ensure_ascii=False).encode("utf-8")
-    art_id = repo.artifacts.put(case_id=case_id, kind="provider_reply", data=raw_bytes)
-    reply = ProviderReply(
-        reply_id=str(uuid.uuid4()),
-        request_id=str(uuid.uuid4()),
-        artifact_ref=art_id,
-        finish_reason="stop",
-        latency_ms=60,
-    )
 
-    accept_review_reply(run.run_id, reply, repo)
-    finalize_run(run.run_id, repo)
+    def _execute_review_pipeline() -> None:
+        try:
+            # 建立審查 context
+            contexts: list[ContextBundle] = []
+            for r in active_rules:
+                cb = ContextBundle(
+                    requirement_ref=VersionRef(
+                        id=r.rule_id, version=r.version, sha256=compute_rule_hash(r)
+                    ),
+                )
+                contexts.append(cb)
 
-    return {"run_id": run.run_id, "status": "completed"}
+            _background_tasks[task_id]["progress"] = 30
+            _background_tasks[task_id]["message"] = "規則適用性評估與規劃中..."
+            plan_review(running_run, contexts, repo=repo)
+
+            # 執行 Mock 回覆與接收
+            _background_tasks[task_id]["progress"] = 60
+            _background_tasks[task_id]["message"] = "AI 審查與條款對照分析中..."
+            findings_list = []
+            for r in active_rules:
+                findings_list.append(
+                    {
+                        "requirement_id": r.rule_id,
+                        "clause_ids": ["clause-10"],
+                        "result": "concern",
+                        "risk": "high",
+                        "reason": f"未落實資安稽核要求: {r.requirement_text}",
+                        "suggested_action": "修正條款以符合資安規範",
+                        "suggested_clause": "廠商應配合每年定期資安稽核，並於30日內提交改善報告，違約金為 [待填金額]。",
+                        "review_scope": "全份合約",
+                    }
+                )
+
+            response_payload = {
+                "run_id": run.run_id,
+                "findings": findings_list,
+            }
+            raw_bytes = json.dumps(response_payload, ensure_ascii=False).encode("utf-8")
+            art_id = repo.artifacts.put(case_id=case_id, kind="provider_reply", data=raw_bytes)
+            reply = ProviderReply(
+                reply_id=str(uuid.uuid4()),
+                request_id=str(uuid.uuid4()),
+                artifact_ref=art_id,
+                finish_reason="stop",
+                latency_ms=60,
+            )
+
+            accept_review_reply(run.run_id, reply, repo)
+            finalize_run(run.run_id, repo)
+
+            _background_tasks[task_id]["status"] = "completed"
+            _background_tasks[task_id]["progress"] = 100
+            _background_tasks[task_id]["message"] = "審查完成"
+        except Exception as e:  # noqa: BLE001
+            _background_tasks[task_id]["status"] = "failed"
+            _background_tasks[task_id]["error"] = str(e)
+            _background_tasks[task_id]["message"] = f"審查失敗: {e}"
+
+    executor.submit(_execute_review_pipeline)
+
+    return {
+        "status": "running",
+        "task_id": task_id,
+        "run_id": run.run_id,
+    }
 
 
 @router.get("/api/cases/{case_id}/review/status")
@@ -887,16 +960,33 @@ async def api_list_rules(request: Request) -> dict[str, Any]:
 
 
 @router.post("/api/rules/release")
-async def api_release_rules(request: Request) -> dict[str, Any]:
+@router.post("/api/rules/{rule_id}/release")
+async def api_release_rules(request: Request, rule_id: str | None = None) -> dict[str, Any]:
     operator = get_current_operator(request)
     repo = _get_repo(request)
-    body = await request.json()
+    body: dict[str, Any] = {}
+    try:
+        body = await request.json()
+    except (json.JSONDecodeError, ValueError):
+        body = {}
 
-    rules_data = body.get("rules", [])
-    sources_data = body.get("sources", [])
-
-    rules = [Rule.model_validate(r) for r in rules_data]
-    sources = [SourceReference.model_validate(s) for s in sources_data]
+    target_rule_id = rule_id or body.get("rule_id")
+    if target_rule_id:
+        version = body.get("version")
+        if not version:
+            matched_rules = [r for r in repo.list_rules() if r.rule_id == target_rule_id]
+            if not matched_rules:
+                raise HTTPException(status_code=404, detail=f"Rule {target_rule_id} not found")
+            rule = matched_rules[0]
+        else:
+            rule = repo.get_rule(target_rule_id, version)
+        rules = [rule]
+        sources = []
+    else:
+        rules_data = body.get("rules", [])
+        sources_data = body.get("sources", [])
+        rules = [Rule.model_validate(r) for r in rules_data]
+        sources = [SourceReference.model_validate(s) for s in sources_data]
 
     refs = release_rules(
         rules=rules,

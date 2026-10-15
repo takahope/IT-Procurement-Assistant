@@ -111,6 +111,26 @@
 
 {% block scripts %}
 <script>
+document.querySelectorAll('.release-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+        const ruleId = btn.getAttribute('data-rule');
+        const ver = btn.getAttribute('data-ver');
+        if (!confirm(`確定要核准發布規則 ${ruleId} (v${ver}) 嗎？`)) return;
+
+        try {
+            await apiRequest('/api/rules/release', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ rule_id: ruleId, version: ver })
+            });
+            alert(`規則 ${ruleId} 已成功核准發布！`);
+            window.location.reload();
+        } catch (err) {
+            alert('核准發布失敗: ' + err.message);
+        }
+    });
+});
+
 document.querySelectorAll('.revoke-btn').forEach(btn => {
     btn.addEventListener('click', async () => {
         const ruleId = btn.getAttribute('data-rule');
