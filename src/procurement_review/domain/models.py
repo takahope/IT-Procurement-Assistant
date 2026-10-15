@@ -153,6 +153,10 @@ class Rule(StrictBaseModel):
     change_reason: str | None = None
     test_case_ids: list[str] = Field(default_factory=list)
 
+    @property
+    def id(self) -> str:
+        return self.rule_id
+
 
 class Requirement(StrictBaseModel):
     """單一可判斷資安要求契約"""
@@ -169,6 +173,10 @@ class Requirement(StrictBaseModel):
     risk_level: RiskLevel = RiskLevel.MEDIUM
     required_documents: list[str] = Field(default_factory=list)
     protected_constraints: list[str] = Field(default_factory=list)
+
+    @property
+    def id(self) -> str:
+        return self.requirement_id
 
 
 class ApplicabilityDecision(StrictBaseModel):

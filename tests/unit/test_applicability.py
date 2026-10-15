@@ -1,5 +1,5 @@
 import uuid
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 
 import pytest
@@ -245,7 +245,7 @@ def test_guideline_is_not_law():
         locator="DOC-001",
         section="§4.2",
         version="1.0",
-        verified_at=datetime.now(),
+        verified_at=datetime.now(UTC),
         verified_by="審查員",
         content_hash="hash_guideline",
     )
@@ -261,3 +261,50 @@ def test_guideline_is_not_law():
     assert decision.state == ApplicabilityState.APPLICABLE
     # 驗證保留建議性質說明於理由中
     assert any("guideline" in r.lower() or "建議" in r for r in decision.reasons)
+
+
+def test_evaluate_applicability_with_requirement_and_date_bounds():
+    """驗證 evaluate_applicability 接受 Requirement 傳入 effective_from 與 effective_to 檢核效期。"""
+    req = Requirement(
+        requirement_id=str(uuid.uuid4()),
+        version="1.0",
+        rule_ref=VersionRef(id=str(uuid.uuid4()), version="1.0", sha256="hash"),
+        obligation="廠商應提供定期資安檢查清冊",
+        obligor="廠商",
+        condition=None,
+        mandatory=True,
+    )
+    facts = make_sample_facts(baseline_date="2026-10-15")
+
+    # 早於生效起日 -> NOT_APPLICABLE
+    d_before = evaluate_applicability(
+        req,
+        facts,
+        as_of=date(2026, 10, 15),
+        effective_from=date(2027, 1, 1),
+        effective_to=date(2027, 12, 31),
+    )
+    assert d_before.state == ApplicabilityState.NOT_APPLICABLE
+    assert any("規則尚未生效" in r for r in d_before.reasons)
+
+    # 晚於或等於截止日 -> NOT_APPLICABLE (半開區間不含止日)
+    d_after = evaluate_applicability(
+        req,
+        facts,
+        as_of=date(2026, 10, 15),
+        effective_from=date(2025, 1, 1),
+        effective_to=date(2026, 10, 15),
+    )
+    assert d_after.state == ApplicabilityState.NOT_APPLICABLE
+    assert any("規則已過期" in r for r in d_after.reasons)
+
+    # 在效期區間內 [effective_from, effective_to) -> APPLICABLE
+    d_valid = evaluate_applicability(
+        req,
+        facts,
+        as_of=date(2026, 10, 15),
+        effective_from=date(2026, 1, 1),
+        effective_to=date(2026, 12, 31),
+    )
+    assert d_valid.state == ApplicabilityState.APPLICABLE
+

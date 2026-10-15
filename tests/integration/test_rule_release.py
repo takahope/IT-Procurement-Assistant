@@ -69,6 +69,10 @@ def make_test_rule(
     category: ProcurementFamily = ProcurementFamily.SERVICES,
     title: str = "資通安全防護基準遵守",
     condition: dict | None = None,
+    effective_from: date | None = None,
+    effective_to: date | None = None,
+    conflicts_with: list[str] | None = None,
+    supersedes: list[str] | None = None,
 ) -> Rule:
     rid = rule_id or str(uuid.uuid4())
     sources = []
@@ -91,6 +95,10 @@ def make_test_rule(
         applicability=condition or {},
         mandatory=True,
         severity=RiskLevel.HIGH,
+        effective_from=effective_from,
+        effective_to=effective_to,
+        conflicts_with=conflicts_with or [],
+        supersedes=supersedes or [],
     )
 
 
@@ -332,4 +340,221 @@ def test_source_update_pending_reverification_blocks_only_related_requirements(r
 
     # 引用 source_b 的要求不受影響，依然 applicable
     assert dec_map[rule_b.rule_id].state == ApplicabilityState.APPLICABLE
+
+
+def test_select_requirements_date_validity_half_open_interval(repo: Repository):
+    """日期半開區間檢核：已過期及未來規則判定為 not_applicable 並註明效期原因。"""
+    source = make_verified_source()
+
+    # 1. 已過期規則：有效區間 [2026-01-01, 2026-06-01)
+    expired_rule = make_test_rule(
+        source_ref=source,
+        title="已過期資安舊制規則",
+        effective_from=date(2026, 1, 1),
+        effective_to=date(2026, 6, 1),
+    )
+    # 2. 未來規則：有效區間 [2027-01-01, 2027-12-31)
+    future_rule = make_test_rule(
+        source_ref=source,
+        title="尚未生效之資安新規",
+        effective_from=date(2027, 1, 1),
+        effective_to=date(2027, 12, 31),
+    )
+    # 3. 作用中規則：有效區間 [2026-06-01, 2026-12-31)
+    active_rule = make_test_rule(
+        source_ref=source,
+        title="現行有效資安防護規則",
+        effective_from=date(2026, 6, 1),
+        effective_to=date(2026, 12, 31),
+    )
+
+    refs = release_rules(
+        rules=[expired_rule, future_rule, active_rule],
+        sources=[source],
+        approver="資安法規組長",
+        at=datetime.now(UTC),
+        repo=repo,
+    )
+
+    facts = make_sample_case_facts(baseline_date="2026-10-15")
+    decisions = select_requirements(
+        refs=refs,
+        facts=facts,
+        as_of=date(2026, 10, 15),
+        repo=repo,
+    )
+
+    dec_map = {d.requirement_ref.id: d for d in decisions}
+
+    # 已過期規則判定為 not_applicable
+    assert dec_map[expired_rule.rule_id].state == ApplicabilityState.NOT_APPLICABLE
+    assert any("規則已過期" in r or "after effective_to" in r for r in dec_map[expired_rule.rule_id].reasons)
+
+    # 未來規則判定為 not_applicable
+    assert dec_map[future_rule.rule_id].state == ApplicabilityState.NOT_APPLICABLE
+    assert any("規則尚未生效" in r or "before effective_from" in r for r in dec_map[future_rule.rule_id].reasons)
+
+    # 效期內規則判定為 applicable
+    assert dec_map[active_rule.rule_id].state == ApplicabilityState.APPLICABLE
+
+    # 驗證半開區間邊界 [effective_from, effective_to)
+    # 基準日設為 2026-06-01：
+    # - expired_rule 的 effective_to 為 2026-06-01 (不含截止日 -> not_applicable)
+    # - active_rule 的 effective_from 為 2026-06-01 (含起日 -> applicable)
+    boundary_decisions = select_requirements(
+        refs=refs,
+        facts=facts,
+        as_of=date(2026, 6, 1),
+        repo=repo,
+    )
+    b_map = {d.requirement_ref.id: d for d in boundary_decisions}
+    assert b_map[expired_rule.rule_id].state == ApplicabilityState.NOT_APPLICABLE
+    assert b_map[active_rule.rule_id].state == ApplicabilityState.APPLICABLE
+
+
+def test_select_requirements_rule_supersedes(repo: Repository):
+    """規則取代：被其他選定規則取代之要求標記為 not_applicable，並附明確取代理由。"""
+    source = make_verified_source()
+
+    old_rule_id = str(uuid.uuid4())
+    new_rule_id = str(uuid.uuid4())
+
+    old_rule = make_test_rule(
+        rule_id=old_rule_id,
+        source_ref=source,
+        title="舊版密碼長度要求 (8碼)",
+    )
+    new_rule = make_test_rule(
+        rule_id=new_rule_id,
+        source_ref=source,
+        title="新版密碼長度要求 (12碼)",
+        supersedes=[old_rule_id],
+    )
+
+    refs = release_rules(
+        rules=[old_rule, new_rule],
+        sources=[source],
+        approver="資安法務主任",
+        at=datetime.now(UTC),
+        repo=repo,
+    )
+
+    facts = make_sample_case_facts()
+    decisions = select_requirements(
+        refs=refs,
+        facts=facts,
+        as_of=date(2026, 10, 15),
+        repo=repo,
+    )
+
+    dec_map = {d.requirement_ref.id: d for d in decisions}
+
+    # 被取代之舊規則判定為 not_applicable，並註明被新規則取代
+    assert dec_map[old_rule_id].state == ApplicabilityState.NOT_APPLICABLE
+    assert any(f"已被規則 {new_rule_id} 取代" in r for r in dec_map[old_rule_id].reasons)
+
+    # 取代者新規則判定為 applicable
+    assert dec_map[new_rule_id].state == ApplicabilityState.APPLICABLE
+
+
+def test_select_requirements_rule_conflicts_unresolved(repo: Repository):
+    """未解決衝突：存在衝突關聯的選定規則必須標記為 unknown，不可靜默均判定為 applicable。"""
+    source = make_verified_source()
+
+    rule_a_id = str(uuid.uuid4())
+    rule_b_id = str(uuid.uuid4())
+    rule_c_id = str(uuid.uuid4())
+
+    rule_a = make_test_rule(
+        rule_id=rule_a_id,
+        source_ref=source,
+        title="專案機房本地部署要求",
+        conflicts_with=[rule_b_id],
+    )
+    rule_b = make_test_rule(
+        rule_id=rule_b_id,
+        source_ref=source,
+        title="政府公有雲優先採用要求",
+        conflicts_with=[rule_a_id],
+    )
+    rule_c = make_test_rule(
+        rule_id=rule_c_id,
+        source_ref=source,
+        title="共通源碼檢測要求",
+    )
+
+    refs = release_rules(
+        rules=[rule_a, rule_b, rule_c],
+        sources=[source],
+        approver="架構治理委員會",
+        at=datetime.now(UTC),
+        repo=repo,
+    )
+
+    facts = make_sample_case_facts()
+    decisions = select_requirements(
+        refs=refs,
+        facts=facts,
+        as_of=date(2026, 10, 15),
+        repo=repo,
+    )
+
+    dec_map = {d.requirement_ref.id: d for d in decisions}
+
+    # 衝突規則 A 與 B 均必須判定為 unknown，且載明衝突對象
+    assert dec_map[rule_a_id].state == ApplicabilityState.UNKNOWN
+    assert any(f"與規則 {rule_b_id} 存在衝突，待決策確認" in r for r in dec_map[rule_a_id].reasons)
+
+    assert dec_map[rule_b_id].state == ApplicabilityState.UNKNOWN
+    assert any(f"與規則 {rule_a_id} 存在衝突，待決策確認" in r for r in dec_map[rule_b_id].reasons)
+
+    # 無衝突的規則 C 正常適用
+    assert dec_map[rule_c_id].state == ApplicabilityState.APPLICABLE
+
+
+def test_select_requirements_conflict_ignored_when_one_side_expired_or_superseded(repo: Repository):
+    """當衝突規則因過期或已被取代而不適用時，不應牽連有效規則變為 unknown。"""
+    source = make_verified_source()
+
+    rule_live_id = str(uuid.uuid4())
+    rule_expired_id = str(uuid.uuid4())
+
+    rule_live = make_test_rule(
+        rule_id=rule_live_id,
+        source_ref=source,
+        title="現行雲端存取控管",
+        effective_from=date(2026, 1, 1),
+        conflicts_with=[rule_expired_id],
+    )
+    rule_expired = make_test_rule(
+        rule_id=rule_expired_id,
+        source_ref=source,
+        title="歷史雲端存取控管",
+        effective_from=date(2025, 1, 1),
+        effective_to=date(2026, 1, 1),  # 已於 2026-01-01 過期
+        conflicts_with=[rule_live_id],
+    )
+
+    refs = release_rules(
+        rules=[rule_live, rule_expired],
+        sources=[source],
+        approver="合約管理員",
+        at=datetime.now(UTC),
+        repo=repo,
+    )
+
+    facts = make_sample_case_facts(baseline_date="2026-10-15")
+    decisions = select_requirements(
+        refs=refs,
+        facts=facts,
+        as_of=date(2026, 10, 15),
+        repo=repo,
+    )
+
+    dec_map = {d.requirement_ref.id: d for d in decisions}
+    # 過期規則為 not_applicable
+    assert dec_map[rule_expired_id].state == ApplicabilityState.NOT_APPLICABLE
+    # 現行規則不應受到已過期規則衝突影響，應為 applicable
+    assert dec_map[rule_live_id].state == ApplicabilityState.APPLICABLE
+
 

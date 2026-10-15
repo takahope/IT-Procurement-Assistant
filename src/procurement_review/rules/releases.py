@@ -117,15 +117,62 @@ def select_requirements(
     - 同一 requirement_id 在結果中僅出現一次 (去重)。
     - 若法規來源處於「更新待查」狀態，僅阻擋引用該來源之相關要求，不阻擋其他要求。
     - 依據基準日期 as_of 檢核效期 [effective_from, effective_to)。
+    - 若規則已被其他選定規則取代 (superseded)，要求判定為 not_applicable。
+    - 若選定規則間存在未解決衝突 (conflicts_with)，要求判定為 unknown。
     """
+    distinct_rules: list[Rule] = []
+    seen_rule_keys: set[tuple[str, str]] = set()
+
+    for ref in refs:
+        key = (ref.id, ref.version)
+        if key in seen_rule_keys:
+            continue
+        seen_rule_keys.add(key)
+        try:
+            rule = repo.get_rule(ref.id, ref.version)
+        except DomainError:
+            continue
+        if rule.status != RuleStatus.ACTIVE:
+            continue
+        distinct_rules.append(rule)
+
+    # 1. 檢核取代關係 (supersedes)
+    superseded_by: dict[str, list[Rule]] = {}
+    for rule in distinct_rules:
+        for superseded_id in rule.supersedes:
+            superseded_by.setdefault(superseded_id, []).append(rule)
+
+    # 2. 檢核日期效期 [effective_from, effective_to)
+    def check_date_validity(r: Rule, target_date: date) -> tuple[bool, str | None]:
+        if r.effective_from is not None and target_date < r.effective_from:
+            return False, f"Baseline date {target_date} is before effective_from {r.effective_from} (規則尚未生效)"
+        if r.effective_to is not None and target_date >= r.effective_to:
+            return False, f"Baseline date {target_date} is on or after effective_to {r.effective_to} (規則已過期)"
+        return True, None
+
+    # 3. 找出有效候選規則（未被取代且在基準日有效）
+    candidate_rules = [
+        rule
+        for rule in distinct_rules
+        if rule.rule_id not in superseded_by and check_date_validity(rule, as_of)[0]
+    ]
+
+    # 4. 檢核衝突關係 (conflicts_with)
+    conflicts_map: dict[str, list[str]] = {}
+    for r1 in candidate_rules:
+        for r2 in candidate_rules:
+            if r1.rule_id == r2.rule_id:
+                continue
+            if (
+                r2.rule_id in r1.conflicts_with or r1.rule_id in r2.conflicts_with
+            ) and r2.rule_id not in conflicts_map.setdefault(r1.rule_id, []):
+                conflicts_map[r1.rule_id].append(r2.rule_id)
+
+    # 5. 逐一判定適用性並執行去重
     seen_req_ids: set[str] = set()
     decisions: list[ApplicabilityDecision] = []
 
-    for ref in refs:
-        rule = repo.get_rule(ref.id, ref.version)
-        if rule.status != RuleStatus.ACTIVE:
-            continue
-
+    for rule in distinct_rules:
         # 檢查法源是否發生「更新待查」情境
         source_pending_reverification = False
         for sref in rule.source_refs:
@@ -135,9 +182,10 @@ def select_requirements(
                     source_pending_reverification = True
                     break
             except DomainError:
-                # 若儲存庫未記錄或來源不存在，視為待查
                 source_pending_reverification = True
                 break
+
+        is_date_valid, date_reason = check_date_validity(rule, as_of)
 
         requirements = repo.get_requirements_for_rule(rule.rule_id, rule.version)
         if not requirements:
@@ -148,19 +196,47 @@ def select_requirements(
                 continue
             seen_req_ids.add(req.requirement_id)
 
-            if source_pending_reverification:
-                # 僅阻擋依賴未查核來源的要求
+            req_ref = VersionRef(
+                id=req.requirement_id,
+                version=req.version,
+                sha256=req.rule_ref.sha256,
+            )
+
+            if rule.rule_id in superseded_by:
+                superseding = superseded_by[rule.rule_id]
                 decision = ApplicabilityDecision(
-                    requirement_ref=VersionRef(
-                        id=req.requirement_id,
-                        version=req.version,
-                        sha256=req.rule_ref.sha256,
-                    ),
+                    requirement_ref=req_ref,
+                    state=ApplicabilityState.NOT_APPLICABLE,
+                    reasons=[f"已被規則 {s.rule_id} 取代" for s in superseding],
+                )
+            elif not is_date_valid:
+                decision = ApplicabilityDecision(
+                    requirement_ref=req_ref,
+                    state=ApplicabilityState.NOT_APPLICABLE,
+                    reasons=[date_reason or "規則非處於有效期限內"],
+                )
+            elif rule.rule_id in conflicts_map:
+                conflicting_ids = conflicts_map[rule.rule_id]
+                reasons = [f"與規則 {cid} 存在衝突，待決策確認" for cid in conflicting_ids]
+                decision = ApplicabilityDecision(
+                    requirement_ref=req_ref,
+                    state=ApplicabilityState.UNKNOWN,
+                    reasons=reasons,
+                )
+            elif source_pending_reverification:
+                decision = ApplicabilityDecision(
+                    requirement_ref=req_ref,
                     state=ApplicabilityState.UNKNOWN,
                     reasons=["來源更新待查 (Source pending reverification)"],
                 )
             else:
-                decision = evaluate_applicability(req, facts, as_of=as_of)
+                decision = evaluate_applicability(
+                    req,
+                    facts,
+                    as_of=as_of,
+                    effective_from=rule.effective_from,
+                    effective_to=rule.effective_to,
+                )
 
             decisions.append(decision)
 

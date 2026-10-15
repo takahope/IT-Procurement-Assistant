@@ -257,6 +257,8 @@ def evaluate_applicability(
     requirement: Requirement | Rule,
     facts: CaseFacts,
     as_of: date | None = None,
+    effective_from: date | None = None,
+    effective_to: date | None = None,
 ) -> ApplicabilityDecision:
     """依據案件事實與基準日期判定單一資安要求／規則之適用性。
 
@@ -274,32 +276,32 @@ def evaluate_applicability(
         ref = VersionRef(id=rule.rule_id, version=rule.version, sha256=r_hash)
         cond = rule.applicability
         is_guideline = not rule.mandatory
-        effective_from = rule.effective_from
-        effective_to = rule.effective_to
+        eff_from = rule.effective_from if effective_from is None else effective_from
+        eff_to = rule.effective_to if effective_to is None else effective_to
     else:
         req = requirement
         r_hash = compute_requirement_hash(req)
         ref = VersionRef(id=req.requirement_id, version=req.version, sha256=r_hash)
         cond = req.condition
         is_guideline = not req.mandatory
-        effective_from = None
-        effective_to = None
+        eff_from = effective_from
+        eff_to = effective_to
 
     reasons: list[str] = []
     if is_guideline:
         reasons.append("guideline_recommendation: 建議性質，非強制性法定要求")
 
     # 1. 期限檢驗：採半開區間 [effective_from, effective_to)
-    if effective_from is not None and ref_date < effective_from:
-        reasons.append(f"Baseline date {ref_date} is before effective_from {effective_from}")
+    if eff_from is not None and ref_date < eff_from:
+        reasons.append(f"Baseline date {ref_date} is before effective_from {eff_from} (規則尚未生效)")
         return ApplicabilityDecision(
             requirement_ref=ref,
             state=ApplicabilityState.NOT_APPLICABLE,
             reasons=reasons,
         )
 
-    if effective_to is not None and ref_date >= effective_to:
-        reasons.append(f"Baseline date {ref_date} is on or after effective_to {effective_to}")
+    if eff_to is not None and ref_date >= eff_to:
+        reasons.append(f"Baseline date {ref_date} is on or after effective_to {eff_to} (規則已過期)")
         return ApplicabilityDecision(
             requirement_ref=ref,
             state=ApplicabilityState.NOT_APPLICABLE,
