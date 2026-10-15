@@ -43,28 +43,57 @@
 </div>
 
 <div class="card">
-    <div class="card-title">模型供應商連線資訊 (Provider Config)</div>
+    <div class="card-title">核准模型供應商連線資訊 (Approved Provider Config)</div>
+    <p style="color: var(--text-muted); margin-bottom: 1rem; font-size: 0.9rem;">
+        依資安治理政策，本系統僅啟用<strong>單一經資安專責小組審查核准之雲端供應商</strong>。所有出站請求均須經由去識別化遮罩、不可變雜湊綁定及人工發送核准。
+    </p>
     <table>
-        <thead>
-            <tr>
-                <th>供應商名稱</th>
-                <th>HTTPS 端點位址</th>
-                <th>預設模型名稱</th>
-                <th>金鑰狀態</th>
-            </tr>
-        </thead>
         <tbody>
             <tr>
-                <td><strong>Mock Provider (測試)</strong></td>
-                <td><code>https://mock.provider.local/v1/chat/completions</code></td>
-                <td><code>mock-legal-v1</code></td>
-                <td><span class="badge badge-success">內建模擬金鑰</span></td>
+                <th style="width: 250px;">供應商識別 (Provider)</th>
+                <td><strong>Approved Cloud Provider (核准雲端供應商)</strong></td>
             </tr>
             <tr>
-                <td><strong>OpenAI Compatible</strong></td>
-                <td><code>https://api.openai.com/v1/chat/completions</code></td>
-                <td><code>gpt-4o</code></td>
-                <td><span class="badge badge-warning">依系統環境設定</span></td>
+                <th>HTTPS 端點 (Endpoint)</th>
+                <td><code>https://api.approved-cloud.example.com/v1/chat/completions</code></td>
+            </tr>
+            <tr>
+                <th>核准模型名稱 (Model)</th>
+                <td><code>approved-review-v1</code></td>
+            </tr>
+            <tr>
+                <th>憑證參照 (Credential Ref)</th>
+                <td><code>approved_cloud_api_key</code> <span class="badge badge-success">本機 SecretStore 安全保管</span></td>
+            </tr>
+            <tr>
+                <th>資安條款檢核 (Terms Compliance)</th>
+                <td>
+                    <span class="badge badge-success">訓練排除 (Training Opt-out)</span>
+                    <span class="badge badge-success">零資料留存 (Zero Data Retention)</span>
+                    <span class="badge badge-success">核准地區 (Taiwan / US-West)</span>
+                    <span class="badge badge-success">次處理者揭露審查</span>
+                    <span class="badge badge-success">過期自動刪除承諾</span>
+                </td>
+            </tr>
+            <tr>
+                <th>安全限制與門檻 (Limits)</th>
+                <td>
+                    <span>Request 上限: <code>1 MB</code></span> |
+                    <span>Response 上限: <code>2 MB</code></span> |
+                    <span>Timeout: <code>30 秒</code></span> |
+                    <span>速率上限: <code>60 RPM / 100,000 TPM</code></span>
+                </td>
+            </tr>
+            <tr>
+                <th>預算與成本狀態 (Budget & Cost)</th>
+                <td>
+                    <span>每月預算上限: <code>NT$ 10,000</code></span> |
+                    <span>成本費率狀態: <span class="badge badge-warning">未知 (Unknown，不能預設為 0)</span></span>
+                </td>
+            </tr>
+            <tr>
+                <th>工具調用政策 (Tool-Call Policy)</th>
+                <td><span class="badge badge-danger">嚴格阻擋 (禁止模型發起 tool_calls / function_call)</span></td>
             </tr>
         </tbody>
     </table>
