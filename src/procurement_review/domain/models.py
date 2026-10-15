@@ -593,6 +593,7 @@ class HumanDecision(StrictBaseModel):
     reason: str
     decided_by: str
     decided_at: datetime
+    run_id: UUIDStr | None = None
 
 
 class Feedback(StrictBaseModel):

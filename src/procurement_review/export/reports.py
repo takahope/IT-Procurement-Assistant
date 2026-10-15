@@ -12,6 +12,7 @@
 
 import json
 import re
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from procurement_review.domain.enums import RedactionMode, ResultEnum
@@ -72,6 +73,9 @@ def export_review(
     original_contract_path: Path | None = None,
     restoration_result: RestorationResult | None = None,
     forbidden_terms: list[str] | None = None,
+    retention_period_days: int = 30,
+    retention_policy: str | None = None,
+    retention_expire_at: datetime | None = None,
 ) -> ExportPaths:
     """匯出審查報告（Markdown 與 JSON 格式）。
 
@@ -83,6 +87,9 @@ def export_review(
     - original_contract_path: 原始合約路徑（用於防止覆寫檢查）
     - restoration_result: 本機文字還原結果（用於檢查是否包含未授權 token）
     - forbidden_terms: 額外機敏詞清單（遮罩模式下二次防護）
+    - retention_period_days: 明文產物保存天數（預設 30 天）
+    - retention_policy: 明文產物保存政策名稱
+    - retention_expire_at: 明文產物保存到期時間（若未提供依天數推算）
     """
     mode_str = str(mode).lower().strip()
     if mode_str not in ("masked", "plaintext"):
@@ -123,6 +130,11 @@ def export_review(
                 "Export paths cannot overwrite original contract file",
             )
 
+    # 計算保存生命週期中繼資料
+    policy_name = retention_policy or "strict_confidential_artifact_policy"
+    computed_expire_dt = retention_expire_at or (report.generated_at + timedelta(days=retention_period_days))
+    expire_dt_str = computed_expire_dt.isoformat()
+
     # 4. 組裝 Markdown 內容
     md_lines: list[str] = [
         "# 採購合約資安審查報告",
@@ -138,9 +150,23 @@ def export_review(
         f"- **機敏等級**: {report.sensitivity_level}",
         f"- **匯出模式**: {'遮罩檢視模式 (Masked)' if mode_str == 'masked' else '明文核定模式 (Plaintext)'}",
         f"- **產出時間**: {report.generated_at.isoformat()}",
-        "",
-        "## 審查發現一覽 (Findings)",
     ]
+
+    if mode_str == "plaintext":
+        md_lines.extend(
+            [
+                f"- **保存政策 (Retention Policy)**: {policy_name}",
+                f"- **保存期限 (Retention Period)**: {retention_period_days} days",
+                f"- **保存到期時間 (Retention Expire At)**: {expire_dt_str}",
+            ]
+        )
+
+    md_lines.extend(
+        [
+            "",
+            "## 審查發現一覽 (Findings)",
+        ]
+    )
 
     if report.findings:
         md_lines.extend(
@@ -229,6 +255,18 @@ def export_review(
         "findings": [f.model_dump(mode="json") for f in report.findings],
         "human_decisions": [d.model_dump(mode="json") for d in report.human_decisions],
     }
+
+    if mode_str == "plaintext":
+        json_data["retention_policy"] = policy_name
+        json_data["retention_period"] = f"{retention_period_days} days"
+        json_data["retention_period_days"] = retention_period_days
+        json_data["retention_expire_at"] = expire_dt_str
+        json_data["lifecycle"] = {
+            "retention_policy": policy_name,
+            "retention_period": f"{retention_period_days} days",
+            "retention_period_days": retention_period_days,
+            "retention_expire_at": expire_dt_str,
+        }
 
     json_str = json.dumps(json_data, ensure_ascii=False, indent=2)
     json_str = _enforce_zero_score_constraint(json_str)

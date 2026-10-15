@@ -531,3 +531,93 @@ def test_export_review_json_structure(tmp_path: Path):
     assert "human_decisions" in data
     assert len(data["human_decisions"]) == 1
     assert data["human_decisions"][0]["action"] == "adopt"
+
+
+def test_export_review_masked_mode_forbidden_term_leak_raises_domain_error(tmp_path: Path):
+    """負向測試：遮罩模式下若有未遮罩敏感實體洩漏，必須觸發 MASKING_LEAK_DETECTED 阻擋匯出。"""
+    run_id = str(uuid.uuid4())
+    case_id = str(uuid.uuid4())
+    leaked_vendor = "極機密廠商-AlphaCorp"
+    finding = Finding(
+        finding_id=str(uuid.uuid4()),
+        run_id=run_id,
+        clause_ids=["clause-sec-1"],
+        requirement_id=str(uuid.uuid4()),
+        result=ResultEnum.CONCERN,
+        risk=RiskLevel.HIGH,
+        reason=f"合約文字未經完全遮罩，直接提及 {leaked_vendor} 責任劃分",
+        human_status="unreviewed",
+    )
+    report = ReviewReport(
+        report_id=str(uuid.uuid4()),
+        case_id=case_id,
+        run_id=run_id,
+        case_version="1.0.0",
+        sensitivity_level="top_secret",
+        source_manifest=[make_dummy_version_ref()],
+        findings=[finding],
+        coverage=CoverageMatrix(run_id=run_id),
+        unresolved_issues=[],
+        human_decisions=[],
+        generated_at=datetime.now(UTC),
+    )
+
+    export_dir = tmp_path / "export_leak"
+    with pytest.raises(DomainError) as exc_info:
+        export_review(
+            report,
+            mode="masked",
+            output_dir=export_dir,
+            forbidden_terms=[leaked_vendor],
+        )
+    assert exc_info.value.code == "MASKING_LEAK_DETECTED"
+    assert leaked_vendor in str(exc_info.value)
+
+
+def test_export_review_plaintext_retention_metadata(tmp_path: Path):
+    """明文匯出應在 JSON 中繼資料中包含 retention_policy、retention_period 與 retention_expire_at。"""
+    run_id = str(uuid.uuid4())
+    case_id = str(uuid.uuid4())
+    gen_time = datetime(2026, 10, 15, 12, 0, 0, tzinfo=UTC)
+    report = ReviewReport(
+        report_id=str(uuid.uuid4()),
+        case_id=case_id,
+        run_id=run_id,
+        case_version="1.0.0",
+        sensitivity_level="confidential",
+        source_manifest=[make_dummy_version_ref()],
+        findings=[],
+        coverage=CoverageMatrix(run_id=run_id),
+        unresolved_issues=[],
+        human_decisions=[],
+        generated_at=gen_time,
+    )
+
+    export_dir = tmp_path / "export_plain_retention"
+    paths = export_review(
+        report,
+        mode="plaintext",
+        output_dir=export_dir,
+        confirmed=True,
+        retention_period_days=45,
+        retention_policy="classified_procurement_30d_plus",
+    )
+
+    with open(paths.json_path, encoding="utf-8") as f:
+        data = json.load(f)
+
+    assert data["mode"] == "plaintext"
+    assert data["retention_policy"] == "classified_procurement_30d_plus"
+    assert data["retention_period"] == "45 days"
+    assert data["retention_period_days"] == 45
+    assert "retention_expire_at" in data
+    assert data["retention_expire_at"].startswith("2026-11-29T12:00:00")
+    assert "lifecycle" in data
+    assert data["lifecycle"]["retention_policy"] == "classified_procurement_30d_plus"
+    assert data["lifecycle"]["retention_period_days"] == 45
+
+    md_content = Path(paths.markdown_path).read_text(encoding="utf-8")
+    assert "保存政策 (Retention Policy)" in md_content
+    assert "classified_procurement_30d_plus" in md_content
+    assert "45 days" in md_content
+

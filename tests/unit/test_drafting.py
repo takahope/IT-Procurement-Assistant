@@ -99,6 +99,48 @@ def test_validate_change_unsupported_three_day_change_fails_structure():
     assert any("30日" in issue or "3日" in issue or "protected" in issue.lower() or "duration" in issue.lower() for issue in report.issues)
 
 
+def test_validate_change_duration_regex_allows_thirteen_or_twenty_three_days():
+    """驗證合法數字如 13日、23日 不會被誤判為縮減為 3日。"""
+    run_id = str(uuid.uuid4())
+    req = make_dummy_requirement(
+        obligation="乙方應於30日內修補資安漏洞",
+        protected_constraints=["30日", "30 days"],
+    )
+    finding = make_dummy_finding(run_id=run_id, req_id=req.requirement_id)
+
+    # 13日 測試
+    change_13 = SuggestedChange(
+        change_id=str(uuid.uuid4()),
+        finding_id=finding.finding_id,
+        run_id=run_id,
+        purpose="依核准條款修訂為13日",
+        basis_rule_refs=[req.rule_ref],
+        proposed_text="乙方應於13日內修補所有重大資安漏洞。",
+        affected_clause_ids=finding.clause_ids,
+        protected_field_modifications=["調整為13日"],
+        fill_in_placeholders=[],
+    )
+    report_13 = validate_change(change_13, finding, req)
+    assert report_13.structure.ok
+    assert not any("duration" in issue.lower() for issue in report_13.issues)
+
+    # 23日 測試
+    change_23 = SuggestedChange(
+        change_id=str(uuid.uuid4()),
+        finding_id=finding.finding_id,
+        run_id=run_id,
+        purpose="依核准條款修訂為23日",
+        basis_rule_refs=[req.rule_ref],
+        proposed_text="乙方應於23天內完成通報與修復。",
+        affected_clause_ids=finding.clause_ids,
+        protected_field_modifications=[],
+        fill_in_placeholders=[],
+    )
+    report_23 = validate_change(change_23, finding, req)
+    assert report_23.structure.ok
+    assert not any("duration" in issue.lower() for issue in report_23.issues)
+
+
 def test_validate_change_obligor_swapping_fails_structure():
     """主體交換（如乙方責任移轉予甲方）不可直接採用。"""
     run_id = str(uuid.uuid4())

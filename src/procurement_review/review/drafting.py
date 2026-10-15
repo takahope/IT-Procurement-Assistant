@@ -186,14 +186,16 @@ def validate_change(
     # 檢查 protected_field_modifications 或 proposed_text 中的時限縮減
     has_unauthorized_duration_change = False
     for mod in change.protected_field_modifications:
-        if any(d in mod for d in ("30日", "30", "30 days")) and any(r in mod for r in ("3日", "3", "3 days")):
+        if any(d in mod for d in ("30日", "30", "30 days")) and re.search(
+            r"(?<!\d)3\s*(?:日|天|days?)", mod
+        ):
             has_unauthorized_duration_change = True
             break
 
     # 檢查 requirement 限制中包含 30日/天，而 proposed_text 縮減為 3日/天
     req_text_combined = f"{requirement.obligation} {' '.join(requirement.protected_constraints)}"
-    if any(k in req_text_combined for k in ("30日", "30天", "30 days")) and any(
-        k in change.proposed_text for k in ("3日", "3天", "3 days")
+    if any(k in req_text_combined for k in ("30日", "30天", "30 days")) and re.search(
+        r"(?<!\d)3\s*(?:日|天|days?)", change.proposed_text
     ):
         has_unauthorized_duration_change = True
 
