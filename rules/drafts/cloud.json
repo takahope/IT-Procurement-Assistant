@@ -1,0 +1,248 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "pack_id": "cloud",
+  "title": "雲端服務採購資安規則包",
+  "version": "1.0",
+  "status": "draft",
+  "rules": [
+    {
+      "rule_id": "30000001-0001-4001-8001-000000000001",
+      "version": "1.0",
+      "status": "draft",
+      "title": "雲端資料儲存地區在地化與跨境傳輸事前審查",
+      "category": "cloud",
+      "requirement_text": "機關機敏及個人資料於雲端環境儲存及運算，以位於中華民國境內為原則；非經機關事前專案書面核准，供應商不得將機關資料跨境傳輸或移轉至境外地區處理",
+      "source_refs": [
+        {
+          "id": "00000001-0001-4001-8001-000000000008",
+          "version": "114.12.30",
+          "sha256": "e6c279f6271db53caa8dc21a94867449aa533323ee27003b2293ffb2b10f6b49"
+        }
+      ],
+      "applicability": {
+        "eq": ["data_flow_cross_border", true]
+      },
+      "mandatory": true,
+      "severity": "critical",
+      "non_negotiable": true,
+      "company_position": "資料主權與境內落地為公務資料安全重要原則，跨境傳輸必須受機關嚴格事前管制。",
+      "fallback_positions": ["若雲端架構必須跨區備援，境外資料中心必須符合我國法規且經機關資安長書面審查同意"],
+      "deterministic_checks": [],
+      "target_sentences": ["資料儲存地區", "境內落地", "跨境傳輸事前核准"],
+      "example_clauses": ["機關資料之主儲存與備份節點均應設於中華民國境內之合格資料中心"],
+      "conflicts_with": [],
+      "supersedes": []
+    },
+    {
+      "rule_id": "30000001-0001-4001-8001-000000000002",
+      "version": "1.0",
+      "status": "draft",
+      "title": "多租戶架構安全邏輯或實體隔離與強韌加密",
+      "category": "cloud",
+      "requirement_text": "雲端服務提供者應採用具備安全認證之多租戶隔離機制，確保機關運算、儲存與網路環境與其他客戶完全隔離，並對傳輸中及靜態儲存之資料採取高強度加密保護",
+      "source_refs": [
+        {
+          "id": "00000001-0001-4001-8001-000000000008",
+          "version": "114.12.30",
+          "sha256": "e6c279f6271db53caa8dc21a94867449aa533323ee27003b2293ffb2b10f6b49"
+        }
+      ],
+      "applicability": {},
+      "mandatory": true,
+      "severity": "high",
+      "non_negotiable": true,
+      "company_position": "多租戶共享環境存在側旁通道及橫向越權風險，必須具備強邏輯或實體隔離及獨立金鑰管理。",
+      "fallback_positions": ["得以機關自管金鑰（BYOK）或專屬獨立租戶配置作為補償控制措施"],
+      "deterministic_checks": [],
+      "target_sentences": ["租戶隔離", "靜態資料加密", "傳輸資料加密", "金鑰管理"],
+      "example_clauses": ["廠商應確保機關雲端租戶與其他租戶完全隔離，防止越權存取"],
+      "conflicts_with": [],
+      "supersedes": []
+    },
+    {
+      "rule_id": "30000001-0001-4001-8001-000000000003",
+      "version": "1.0",
+      "status": "draft",
+      "title": "雲端服務可用性保證（SLA ≥ 99.9%）與異地災難復原演練",
+      "category": "cloud",
+      "requirement_text": "雲端服務提供者應保證月服務可用度達99.9%以上，並具備跨可用區或異地備份復原機制，每年至少執行一次災難復原演練並向機關提交演練成果報告",
+      "source_refs": [
+        {
+          "id": "00000001-0001-4001-8001-000000000008",
+          "version": "114.12.30",
+          "sha256": "e6c279f6271db53caa8dc21a94867449aa533323ee27003b2293ffb2b10f6b49"
+        }
+      ],
+      "applicability": {},
+      "mandatory": true,
+      "severity": "high",
+      "non_negotiable": false,
+      "company_position": "核心與關鍵服務上雲必須確保營運持續性，SLA 與異地復原機制為基礎保障。",
+      "fallback_positions": ["非關鍵系統可用度得以99.5%為協商底線"],
+      "deterministic_checks": [],
+      "target_sentences": ["可用性保證", "SLA", "異地備份", "災難復原演練"],
+      "example_clauses": ["雲端服務可用性不得低於99.9%，未達標準依合約比例扣減月租費或賠償"],
+      "conflicts_with": [],
+      "supersedes": []
+    },
+    {
+      "rule_id": "30000001-0001-4001-8001-000000000004",
+      "version": "1.0",
+      "status": "draft",
+      "title": "雲端退場資料可攜性匯出與不可逆安全銷毀保證",
+      "category": "cloud",
+      "requirement_text": "契約終止、屆滿或機關決定退場時，雲端供應商應以通用可攜格式（如標準關聯式或非專屬檔案結構）完整匯出機關全部資料，並於確認交接完畢後30日內執行不可逆抹除，開具安全銷毀證明書",
+      "source_refs": [
+        {
+          "id": "00000001-0001-4001-8001-000000000008",
+          "version": "114.12.30",
+          "sha256": "e6c279f6271db53caa8dc21a94867449aa533323ee27003b2293ffb2b10f6b49"
+        }
+      ],
+      "applicability": {},
+      "mandatory": true,
+      "severity": "high",
+      "non_negotiable": true,
+      "company_position": "防止供應商鎖定（Vendor Lock-in）與退場後資料殘留於第三方雲端儲存體。",
+      "fallback_positions": [],
+      "deterministic_checks": [],
+      "target_sentences": ["退場機制", "資料可攜性", "資料完整匯出", "不可逆銷毀證明"],
+      "example_clauses": ["契約終止時廠商應無償配合機關資料移轉，並於移轉完成後永久銷毀雲端複本"],
+      "conflicts_with": [],
+      "supersedes": []
+    },
+    {
+      "rule_id": "30000001-0001-4001-8001-000000000005",
+      "version": "1.0",
+      "status": "draft",
+      "title": "禁止雲端供應商單方重大變更條款或降低資安水平",
+      "category": "cloud",
+      "requirement_text": "雲端服務供應商不得以線上條款（Terms of Service）更新為由，單方實質變更契約條款、縮減服務規格、提高計費標準或降低資通安全防護基準，任何重大條款變更須獲機關書面同意",
+      "source_refs": [
+        {
+          "id": "00000001-0001-4001-8001-000000000008",
+          "version": "114.12.30",
+          "sha256": "e6c279f6271db53caa8dc21a94867449aa533323ee27003b2293ffb2b10f6b49"
+        }
+      ],
+      "applicability": {},
+      "mandatory": true,
+      "severity": "medium",
+      "non_negotiable": true,
+      "company_position": "防止商用雲端業者以線上點擊更新方式繞過公務契約約定與資安保障。",
+      "fallback_positions": ["若廠商為因應法規變更而修改條款，應於生效前60日以書面通知，機關得無條件終止契約"],
+      "deterministic_checks": [],
+      "target_sentences": ["禁止單方變更條款", "線上條款變更無效", "維持資安防護水準"],
+      "example_clauses": ["未經機關雙方簽署書面協議前，供應商單方公佈之線上規範變更不拘束機關"],
+      "conflicts_with": [],
+      "supersedes": []
+    }
+  ],
+  "requirements": [
+    {
+      "requirement_id": "30000001-0001-4001-8001-000000000001",
+      "version": "1.0",
+      "rule_ref": {
+        "id": "30000001-0001-4001-8001-000000000001",
+        "version": "1.0",
+        "sha256": "hash_draft_placeholder"
+      },
+      "obligation": "機關機敏及個人資料於雲端環境儲存及運算，以位於中華民國境內為原則；非經機關事前專案書面核准，供應商不得將機關資料跨境傳輸或移轉至境外地區處理",
+      "obligor": "vendor",
+      "condition": "{\"eq\": [\"data_flow_cross_border\", true]}",
+      "mandatory": true,
+      "evidence_requirements": ["資料中心地理位置證明文件", "跨境傳輸管制約定條款"],
+      "deterministic_checks": [],
+      "risk_level": "critical",
+      "required_documents": ["雲端機房所在地清冊", "跨境資料流向圖"],
+      "protected_constraints": ["未經事前審查核准禁止自動跨境複寫"],
+      "status": "draft",
+      "source_id": "00000001-0001-4001-8001-000000000008",
+      "section": "第4條（資料儲存地理區域與未經核准不得跨境傳輸）"
+    },
+    {
+      "requirement_id": "30000001-0001-4001-8001-000000000002",
+      "version": "1.0",
+      "rule_ref": {
+        "id": "30000001-0001-4001-8001-000000000002",
+        "version": "1.0",
+        "sha256": "hash_draft_placeholder"
+      },
+      "obligation": "雲端服務提供者應採用具備安全認證之多租戶隔離機制，確保機關運算、儲存與網路環境與其他客戶完全隔離，並對傳輸中及靜態儲存之資料採取高強度加密保護",
+      "obligor": "vendor",
+      "condition": null,
+      "mandatory": true,
+      "evidence_requirements": ["ISO 27017/27018或SOC 2資安報告", "租戶隔離與加密證明條款"],
+      "deterministic_checks": [],
+      "risk_level": "high",
+      "required_documents": ["第三方資安認證報告證書"],
+      "protected_constraints": ["加密金鑰不得由廠商無條件支配或留存未加密明文"],
+      "status": "draft",
+      "source_id": "00000001-0001-4001-8001-000000000008",
+      "section": "第6條（多租戶隔離機制與資料加密儲存傳輸）"
+    },
+    {
+      "requirement_id": "30000001-0001-4001-8001-000000000003",
+      "version": "1.0",
+      "rule_ref": {
+        "id": "30000001-0001-4001-8001-000000000003",
+        "version": "1.0",
+        "sha256": "hash_draft_placeholder"
+      },
+      "obligation": "雲端服務提供者應保證月服務可用度達99.9%以上，並具備跨可用區或異地備份復原機制，每年至少執行一次災難復原演練並向機關提交演練成果報告",
+      "obligor": "vendor",
+      "condition": null,
+      "mandatory": true,
+      "evidence_requirements": ["SLA服務可用率保證條款", "年度災難復原演練報告"],
+      "deterministic_checks": [],
+      "risk_level": "high",
+      "required_documents": ["災難復原計畫與演練成果報告"],
+      "protected_constraints": ["不可約定廠商完全免除雲端機房故障之維護責任"],
+      "status": "draft",
+      "source_id": "00000001-0001-4001-8001-000000000008",
+      "section": "第9條（服務可用率SLA與異地備份演練）"
+    },
+    {
+      "requirement_id": "30000001-0001-4001-8001-000000000004",
+      "version": "1.0",
+      "rule_ref": {
+        "id": "30000001-0001-4001-8001-000000000004",
+        "version": "1.0",
+        "sha256": "hash_draft_placeholder"
+      },
+      "obligation": "契約終止、屆滿或機關決定退場時，雲端供應商應以通用可攜格式（如標準關聯式或非專屬檔案結構）完整匯出機關全部資料，並於確認交接完畢後30日內執行不可逆抹除，開具安全銷毀證明書",
+      "obligor": "vendor",
+      "condition": null,
+      "mandatory": true,
+      "evidence_requirements": ["退場資料匯出條款", "退場不可逆銷毀承諾書"],
+      "deterministic_checks": [],
+      "risk_level": "high",
+      "required_documents": ["退場移轉計畫書", "資料銷毀證明文件"],
+      "protected_constraints": ["廠商不得藉口專有格式阻撓機關取回資料"],
+      "status": "draft",
+      "source_id": "00000001-0001-4001-8001-000000000008",
+      "section": "第15條（契約終止之資料完整匯出與完全銷毀切結）"
+    },
+    {
+      "requirement_id": "30000001-0001-4001-8001-000000000005",
+      "version": "1.0",
+      "rule_ref": {
+        "id": "30000001-0001-4001-8001-000000000005",
+        "version": "1.0",
+        "sha256": "hash_draft_placeholder"
+      },
+      "obligation": "雲端服務供應商不得以線上條款（Terms of Service）更新為由，單方實質變更契約條款、縮減服務規格、提高計費標準或降低資通安全防護基準，任何重大條款變更須獲機關書面同意",
+      "obligor": "vendor",
+      "condition": null,
+      "mandatory": true,
+      "evidence_requirements": ["排斥供應商單方變更權之條款", "合約優先於線上條款聲明"],
+      "deterministic_checks": [],
+      "risk_level": "medium",
+      "required_documents": ["雲端服務補充條款協議書"],
+      "protected_constraints": ["合約效力必須高於線上浮動更新之一般條款"],
+      "status": "draft",
+      "source_id": "00000001-0001-4001-8001-000000000008",
+      "section": "第18條（服務規格變更協議與禁止單方調高資費或降低資安水平）"
+    }
+  ]
+}

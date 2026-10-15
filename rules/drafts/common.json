@@ -1,0 +1,248 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "pack_id": "common",
+  "title": "資通採購共用資安基線規則包",
+  "version": "1.0",
+  "status": "draft",
+  "rules": [
+    {
+      "rule_id": "10000001-0001-4001-8001-000000000001",
+      "version": "1.0",
+      "status": "draft",
+      "title": "機密維護與資訊保密義務遵守",
+      "category": "services",
+      "requirement_text": "廠商及其履約受雇人或指派人員應負嚴格保密義務，未經機關書面同意不得洩漏或交付履約所知悉之機密資訊，且契約終止後仍持續有效",
+      "source_refs": [
+        {
+          "id": "00000001-0001-4001-8001-000000000007",
+          "version": "113.12.26",
+          "sha256": "8f434346648f6b96df89dda901c5176b10a6d83961dd3c1ac88b59b2dc327aa4"
+        }
+      ],
+      "applicability": {},
+      "mandatory": true,
+      "severity": "high",
+      "non_negotiable": true,
+      "company_position": "保密責任為公務採購法定底線，不因採購型態不同而免除。",
+      "fallback_positions": [],
+      "deterministic_checks": [],
+      "target_sentences": ["保密義務", "機密資訊", "未經書面同意不得洩漏"],
+      "example_clauses": ["第15條保密責任：廠商對於機關之公務機密應採取嚴格保密措施"],
+      "conflicts_with": [],
+      "supersedes": []
+    },
+    {
+      "rule_id": "10000001-0001-4001-8001-000000000002",
+      "version": "1.0",
+      "status": "draft",
+      "title": "個人資料保護與安全維護措施",
+      "category": "services",
+      "requirement_text": "涉個人資料之採購，廠商應依個人資料保護法及相關法規落實安全維護措施，採取適當技術及組織上之保護，防止個資外洩或不當使用",
+      "source_refs": [
+        {
+          "id": "00000001-0001-4001-8001-000000000003",
+          "version": "112.05.31",
+          "sha256": "9b7a36e797825d10a2f4762e19665a3c2069fa34f19934f0e4b706c4b2b64d12"
+        }
+      ],
+      "applicability": {
+        "eq": ["personal_data_involved", true]
+      },
+      "mandatory": true,
+      "severity": "critical",
+      "non_negotiable": true,
+      "company_position": "涉及個人資料處理者，必須嚴格落實個資法第27條之法定防護義務。",
+      "fallback_positions": [],
+      "deterministic_checks": [],
+      "target_sentences": ["個人資料保護", "安全維護措施", "防止個人資料被竊取"],
+      "example_clauses": ["廠商受託處理個人資料時，應遵守個人資料保護法之規定"],
+      "conflicts_with": [],
+      "supersedes": []
+    },
+    {
+      "rule_id": "10000001-0001-4001-8001-000000000003",
+      "version": "1.0",
+      "status": "draft",
+      "title": "資通安全事件通報與緊急應變處置",
+      "category": "services",
+      "requirement_text": "廠商知悉資通安全事件發生或疑似發生時，應立即採取緊急應變措施，並於約定期限內（最遲不得逾24小時）通報機關窗口",
+      "source_refs": [
+        {
+          "id": "00000001-0001-4001-8001-000000000001",
+          "version": "115.01.05",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ],
+      "applicability": {},
+      "mandatory": true,
+      "severity": "high",
+      "non_negotiable": true,
+      "company_position": "事件通報時效為資通安全管理法施行細則第7條之法定監督要求，必須明確限定時效。",
+      "fallback_positions": ["若無特定約定，最遲通報上限不得寬於24小時"],
+      "deterministic_checks": [],
+      "target_sentences": ["資通安全事件", "通報機關", "緊急應變"],
+      "example_clauses": ["廠商於知悉資通安全事件發生時，應於一小時內通報機關"],
+      "conflicts_with": [],
+      "supersedes": []
+    },
+    {
+      "rule_id": "10000001-0001-4001-8001-000000000004",
+      "version": "1.0",
+      "status": "draft",
+      "title": "接受資通安全稽核與實地查核配合義務",
+      "category": "services",
+      "requirement_text": "廠商應同意並配合機關或主管機關進行定期或不定期之資通安全稽核、實地訪查或紀錄調閱，不得無故拒絕",
+      "source_refs": [
+        {
+          "id": "00000001-0001-4001-8001-000000000001",
+          "version": "115.01.05",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ],
+      "applicability": {},
+      "mandatory": true,
+      "severity": "medium",
+      "non_negotiable": false,
+      "company_position": "機關依細則第7條享有委外監督查核權，廠商應全面配合。",
+      "fallback_positions": ["查核得以事前合理書面通知後進行"],
+      "deterministic_checks": [],
+      "target_sentences": ["資通安全稽核", "實地查核", "配合查核"],
+      "example_clauses": ["機關得隨時指派人員至廠商處所進行資通安全查核"],
+      "conflicts_with": [],
+      "supersedes": []
+    },
+    {
+      "rule_id": "10000001-0001-4001-8001-000000000005",
+      "version": "1.0",
+      "status": "draft",
+      "title": "複委託限制與次受託者資安監督義務",
+      "category": "services",
+      "requirement_text": "廠商未經機關事前書面核准，不得將契約工作項目進行複委託；經核准之複委託，廠商仍應負全部監督責任並要求次受託者簽署同等資安保密條款",
+      "source_refs": [
+        {
+          "id": "00000001-0001-4001-8001-000000000001",
+          "version": "115.01.05",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ],
+      "applicability": {},
+      "mandatory": true,
+      "severity": "high",
+      "non_negotiable": true,
+      "company_position": "防止未經授權之第三方經由轉包接觸核心系統或機密資料。",
+      "fallback_positions": [],
+      "deterministic_checks": [],
+      "target_sentences": ["複委託", "事前書面同意", "次受託者"],
+      "example_clauses": ["廠商不得將本專案轉包或未經同意複委託"],
+      "conflicts_with": [],
+      "supersedes": []
+    }
+  ],
+  "requirements": [
+    {
+      "requirement_id": "10000001-0001-4001-8001-000000000001",
+      "version": "1.0",
+      "rule_ref": {
+        "id": "10000001-0001-4001-8001-000000000001",
+        "version": "1.0",
+        "sha256": "hash_draft_placeholder"
+      },
+      "obligation": "廠商及其履約受雇人或指派人員應負嚴格保密義務，未經機關書面同意不得洩漏或交付履約所知悉之機密資訊，且契約終止後仍持續有效",
+      "obligor": "vendor",
+      "condition": null,
+      "mandatory": true,
+      "evidence_requirements": ["合約本文保密條款", "履約人員保密切結書"],
+      "deterministic_checks": [],
+      "risk_level": "high",
+      "required_documents": ["保密同意書"],
+      "protected_constraints": ["不得限制保密期限短於履約期限後五年"],
+      "status": "draft",
+      "source_id": "00000001-0001-4001-8001-000000000007",
+      "section": "第15條（保密責任）"
+    },
+    {
+      "requirement_id": "10000001-0001-4001-8001-000000000002",
+      "version": "1.0",
+      "rule_ref": {
+        "id": "10000001-0001-4001-8001-000000000002",
+        "version": "1.0",
+        "sha256": "hash_draft_placeholder"
+      },
+      "obligation": "涉個人資料之採購，廠商應依個人資料保護法及相關法規落實安全維護措施，採取適當技術及組織上之保護，防止個資外洩或不當使用",
+      "obligor": "vendor",
+      "condition": "{\"eq\": [\"personal_data_involved\", true]}",
+      "mandatory": true,
+      "evidence_requirements": ["個資安全維護計畫", "個資處理特約條款"],
+      "deterministic_checks": [],
+      "risk_level": "critical",
+      "required_documents": ["個資管理作業規範"],
+      "protected_constraints": ["個人資料防護義務不得排除或減免"],
+      "status": "draft",
+      "source_id": "00000001-0001-4001-8001-000000000003",
+      "section": "第27條（適當安全維護措施）"
+    },
+    {
+      "requirement_id": "10000001-0001-4001-8001-000000000003",
+      "version": "1.0",
+      "rule_ref": {
+        "id": "10000001-0001-4001-8001-000000000003",
+        "version": "1.0",
+        "sha256": "hash_draft_placeholder"
+      },
+      "obligation": "廠商知悉資通安全事件發生或疑似發生時，應立即採取緊急應變措施，並於約定期限內（最遲不得逾24小時）通報機關窗口",
+      "obligor": "vendor",
+      "condition": null,
+      "mandatory": true,
+      "evidence_requirements": ["事件通報流程條款", "緊急應變聯絡清冊"],
+      "deterministic_checks": [],
+      "risk_level": "high",
+      "required_documents": ["事件應變計畫"],
+      "protected_constraints": ["事件通報時限最遲不得寬於24小時"],
+      "status": "draft",
+      "source_id": "00000001-0001-4001-8001-000000000001",
+      "section": "第7條（資通安全事件通報處置）"
+    },
+    {
+      "requirement_id": "10000001-0001-4001-8001-000000000004",
+      "version": "1.0",
+      "rule_ref": {
+        "id": "10000001-0001-4001-8001-000000000004",
+        "version": "1.0",
+        "sha256": "hash_draft_placeholder"
+      },
+      "obligation": "廠商應同意並配合機關或主管機關進行定期或不定期之資通安全稽核、實地訪查或紀錄調閱，不得無故拒絕",
+      "obligor": "vendor",
+      "condition": null,
+      "mandatory": true,
+      "evidence_requirements": ["合約載明配合資安稽核條款"],
+      "deterministic_checks": [],
+      "risk_level": "medium",
+      "required_documents": ["稽核配合承諾書"],
+      "protected_constraints": ["不得限制機關實地查核之基本權利"],
+      "status": "draft",
+      "source_id": "00000001-0001-4001-8001-000000000001",
+      "section": "第7條第1項第4款（資通安全稽核配合）"
+    },
+    {
+      "requirement_id": "10000001-0001-4001-8001-000000000005",
+      "version": "1.0",
+      "rule_ref": {
+        "id": "10000001-0001-4001-8001-000000000005",
+        "version": "1.0",
+        "sha256": "hash_draft_placeholder"
+      },
+      "obligation": "廠商未經機關事前書面核准，不得將契約工作項目進行複委託；經核准之複委託，廠商仍應負全部監督責任並要求次受託者簽署同等資安保密條款",
+      "obligor": "vendor",
+      "condition": null,
+      "mandatory": true,
+      "evidence_requirements": ["複委託限制條款", "次受託者資安監督條款"],
+      "deterministic_checks": [],
+      "risk_level": "high",
+      "required_documents": ["複委託申請與切結審核表"],
+      "protected_constraints": ["禁止默示或逕自轉包"],
+      "status": "draft",
+      "source_id": "00000001-0001-4001-8001-000000000001",
+      "section": "第7條第1項第2款（複委託限制與次包商監督）"
+    }
+  ]
+}

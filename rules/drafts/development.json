@@ -1,0 +1,246 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "pack_id": "development",
+  "title": "委外軟體開發採購資安規則包",
+  "version": "1.0",
+  "status": "draft",
+  "rules": [
+    {
+      "rule_id": "50000001-0001-4001-8001-000000000001",
+      "version": "1.0",
+      "status": "draft",
+      "title": "安全軟體開發生命週期（SSDLC）與安全編碼規範遵循",
+      "category": "development",
+      "requirement_text": "廠商進行委外客製系統開發，應遵循安全軟體開發生命週期（SSDLC）規範，導入 OWASP Top 10 防護原則，落實輸入驗證、輸出編碼、身分驗證與授權存取控制等安全編碼實務",
+      "source_refs": [
+        {
+          "id": "00000001-0001-4001-8001-000000000007",
+          "version": "113.12.26",
+          "sha256": "8f434346648f6b96df89dda901c5176b10a6d83961dd3c1ac88b59b2dc327aa4"
+        }
+      ],
+      "applicability": {},
+      "mandatory": true,
+      "severity": "high",
+      "non_negotiable": true,
+      "company_position": "客製軟體開發必須從架構與源頭落實 SSDLC，杜絕結構性安全設計缺陷。",
+      "fallback_positions": [],
+      "deterministic_checks": [],
+      "target_sentences": ["安全軟體開發", "SSDLC", "OWASP", "安全編碼規範"],
+      "example_clauses": ["廠商應於系統分析及設計階段提出資通安全設計規劃，並遵循安全編碼標準開發"],
+      "conflicts_with": [],
+      "supersedes": []
+    },
+    {
+      "rule_id": "50000001-0001-4001-8001-000000000002",
+      "version": "1.0",
+      "status": "draft",
+      "title": "客製化原始碼完整交付、軟體物料清單（SBOM）與組態庫移交",
+      "category": "development",
+      "requirement_text": "委外開發案驗收時，廠商應完整交付本案全部客製化程式原始碼、相依套件軟體物料清單（SBOM）、建置腳本及完整版本歷程，不得藉故扣留或交付混淆後之不可讀程式碼",
+      "source_refs": [
+        {
+          "id": "00000001-0001-4001-8001-000000000007",
+          "version": "113.12.26",
+          "sha256": "8f434346648f6b96df89dda901c5176b10a6d83961dd3c1ac88b59b2dc327aa4"
+        }
+      ],
+      "applicability": {},
+      "mandatory": true,
+      "severity": "critical",
+      "non_negotiable": true,
+      "company_position": "政府與院內出資委託開發之客製化系統，原始碼交付與 SBOM 清單為驗收核心標的，不容妥協。",
+      "fallback_positions": [],
+      "deterministic_checks": [],
+      "target_sentences": ["交付全部原始碼", "軟體物料清單", "SBOM", "禁止程式碼混淆"],
+      "example_clauses": ["驗收時廠商應交付完整註解之原始程式碼光碟或隨身碟，並附第三方套件清單及授權說明"],
+      "conflicts_with": [],
+      "supersedes": []
+    },
+    {
+      "rule_id": "50000001-0001-4001-8001-000000000003",
+      "version": "1.0",
+      "status": "draft",
+      "title": "客製開發成果著作財產權歸屬與開源授權（OSS）衝突排除",
+      "category": "development",
+      "requirement_text": "契約應依資訊服務採購契約範本第16條第3款明訂著作財產權之歸屬；使用開放原始碼（Open Source Software）元件時，廠商應擔保符合該開源許可證要求，且不得引致機關專有業務代碼被強制開源之感染風險（如嚴格 GPL 授權條款衝突）",
+      "source_refs": [
+        {
+          "id": "00000001-0001-4001-8001-000000000007",
+          "version": "113.12.26",
+          "sha256": "8f434346648f6b96df89dda901c5176b10a6d83961dd3c1ac88b59b2dc327aa4"
+        }
+      ],
+      "applicability": {},
+      "mandatory": true,
+      "severity": "high",
+      "non_negotiable": true,
+      "company_position": "資訊服務契約第16條第3款規範智慧財產權與權利歸屬，必須排除傳染性開源授權法律衝突。",
+      "fallback_positions": ["若使用弱感染性開源套件（如 LGPL/MPL），應以動態連結方式隔離，並事先向機關報備審查"],
+      "deterministic_checks": [],
+      "target_sentences": ["著作財產權歸屬", "第16條第3款", "開放原始碼授權", "開源衝突排除"],
+      "example_clauses": ["本專案所完成之著作財產權依契約第16條第3款約定歸機關享有，廠商應排除開源授權衝突"],
+      "conflicts_with": [],
+      "supersedes": []
+    },
+    {
+      "rule_id": "50000001-0001-4001-8001-000000000004",
+      "version": "1.0",
+      "status": "draft",
+      "title": "交付前靜態源碼掃描（SAST）、動態檢測（DAST）與重大弱點清零",
+      "category": "development",
+      "requirement_text": "系統驗收交付前，廠商應使用機關認可之檢測工具執行源碼靜態安全檢測（SAST）及網路/應用系統弱點掃描（DAST），報告所列中高風險弱點應於驗收前完成修補並提交複測報告，確保無高風險資安漏洞殘留",
+      "source_refs": [
+        {
+          "id": "00000001-0001-4001-8001-000000000007",
+          "version": "113.12.26",
+          "sha256": "8f434346648f6b96df89dda901c5176b10a6d83961dd3c1ac88b59b2dc327aa4"
+        }
+      ],
+      "applicability": {},
+      "mandatory": true,
+      "severity": "high",
+      "non_negotiable": true,
+      "company_position": "資安法施行細則第7條規定委外系統應完成資通安全檢測，中高風險弱點清零為驗收硬性指標。",
+      "fallback_positions": ["若部分中低風險弱點因架構限制無法即刻修補，應提出具體有效之補償防護控制措施經機關同意"],
+      "deterministic_checks": [],
+      "target_sentences": ["源碼安全檢測", "SAST", "弱點掃描", "DAST", "高風險弱點修補"],
+      "example_clauses": ["驗收前廠商應檢附源碼檢測無中高風險弱點報告，否則視為驗收不合格"],
+      "conflicts_with": [],
+      "supersedes": []
+    },
+    {
+      "rule_id": "50000001-0001-4001-8001-000000000005",
+      "version": "1.0",
+      "status": "draft",
+      "title": "系統移交部署手冊、維護技術轉移與保固承諾",
+      "category": "development",
+      "requirement_text": "廠商於系統交付驗收時，應提供詳細之系統架構圖、環境安裝部署手冊、資料庫字典、管理操作指引，並對機關人員完成技術轉移教育訓練，自驗收合格日起提供一年以上保固維護",
+      "source_refs": [
+        {
+          "id": "00000001-0001-4001-8001-000000000007",
+          "version": "113.12.26",
+          "sha256": "8f434346648f6b96df89dda901c5176b10a6d83961dd3c1ac88b59b2dc327aa4"
+        }
+      ],
+      "applicability": {},
+      "mandatory": true,
+      "severity": "medium",
+      "non_negotiable": false,
+      "company_position": "防止委外開發成果因技術移交不足形成單一廠商綁架維運，確保自主運維能力。",
+      "fallback_positions": [],
+      "deterministic_checks": [],
+      "target_sentences": ["部署手冊", "技術轉移", "教育訓練", "保固維護"],
+      "example_clauses": ["廠商應於驗收前交付完整系統部署及操作手冊，並辦理至少8小時之管理技術轉移訓練"],
+      "conflicts_with": [],
+      "supersedes": []
+    }
+  ],
+  "requirements": [
+    {
+      "requirement_id": "50000001-0001-4001-8001-000000000001",
+      "version": "1.0",
+      "rule_ref": {
+        "id": "50000001-0001-4001-8001-000000000001",
+        "version": "1.0",
+        "sha256": "hash_draft_placeholder"
+      },
+      "obligation": "廠商進行委外客製系統開發，應遵循安全軟體開發生命週期（SSDLC）規範，導入 OWASP Top 10 防護原則，落實輸入驗證、輸出編碼、身分驗證與授權存取控制等安全編碼實務",
+      "obligor": "vendor",
+      "condition": null,
+      "mandatory": true,
+      "evidence_requirements": ["SSDLC 安全開發規範切結", "軟體架構安全設計說明書"],
+      "deterministic_checks": [],
+      "risk_level": "high",
+      "required_documents": ["系統安全設計規格書"],
+      "protected_constraints": ["不得以開發期程急迫為由省略安全編碼控管"],
+      "status": "draft",
+      "source_id": "00000001-0001-4001-8001-000000000007",
+      "section": "第16條第17款第1目（安全軟體開發生命週期與編碼規範）"
+    },
+    {
+      "requirement_id": "50000001-0001-4001-8001-000000000002",
+      "version": "1.0",
+      "rule_ref": {
+        "id": "50000001-0001-4001-8001-000000000002",
+        "version": "1.0",
+        "sha256": "hash_draft_placeholder"
+      },
+      "obligation": "委外開發案驗收時，廠商應完整交付本案全部客製化程式原始碼、相依套件軟體物料清單（SBOM）、建置腳本及完整版本歷程，不得藉故扣留或交付混淆後之不可讀程式碼",
+      "obligor": "vendor",
+      "condition": null,
+      "mandatory": true,
+      "evidence_requirements": ["原始碼交付清單", "軟體物料清單SBOM檔案"],
+      "deterministic_checks": [],
+      "risk_level": "critical",
+      "required_documents": ["原始碼交付證明書", "SBOM相依清單報告"],
+      "protected_constraints": ["客製化軟體原始碼為必要交付標的，嚴禁以執行檔替代"],
+      "status": "draft",
+      "source_id": "00000001-0001-4001-8001-000000000007",
+      "section": "第16條第3款（客製化成果原始碼交付與著作財產權歸屬）"
+    },
+    {
+      "requirement_id": "50000001-0001-4001-8001-000000000003",
+      "version": "1.0",
+      "rule_ref": {
+        "id": "50000001-0001-4001-8001-000000000003",
+        "version": "1.0",
+        "sha256": "hash_draft_placeholder"
+      },
+      "obligation": "契約應依資訊服務採購契約範本第16條第3款明訂著作財產權之歸屬；使用開放原始碼（Open Source Software）元件時，廠商應擔保符合該開源許可證要求，且不得引致機關專有業務代碼被強制開源之感染風險（如嚴格 GPL 授權條款衝突）",
+      "obligor": "vendor",
+      "condition": null,
+      "mandatory": true,
+      "evidence_requirements": ["著作權歸屬約定條款", "開源許可證合規性審查清單"],
+      "deterministic_checks": [],
+      "risk_level": "high",
+      "required_documents": ["智慧財產權授權同意書", "開源套件授權合規聲明書"],
+      "protected_constraints": ["契約範本第16條第3款智慧財產權約定不得矛盾或留白"],
+      "status": "draft",
+      "source_id": "00000001-0001-4001-8001-000000000007",
+      "section": "第16條第3款（智慧財產權與開放原始碼授權衝突排除）"
+    },
+    {
+      "requirement_id": "50000001-0001-4001-8001-000000000004",
+      "version": "1.0",
+      "rule_ref": {
+        "id": "50000001-0001-4001-8001-000000000004",
+        "version": "1.0",
+        "sha256": "hash_draft_placeholder"
+      },
+      "obligation": "系統驗收交付前，廠商應使用機關認可之檢測工具執行源碼靜態安全檢測（SAST）及網路/應用系統弱點掃描（DAST），報告所列中高風險弱點應於驗收前完成修補並提交複測報告，確保無高風險資安漏洞殘留",
+      "obligor": "vendor",
+      "condition": null,
+      "mandatory": true,
+      "evidence_requirements": ["源碼靜態檢測報告", "弱點掃描報告", "中高風險弱點修補完成複測證明"],
+      "deterministic_checks": [],
+      "risk_level": "high",
+      "required_documents": ["資安檢測報告書", "弱點修補複測報告"],
+      "protected_constraints": ["驗收時不得殘存未修補之中高風險資安弱點"],
+      "status": "draft",
+      "source_id": "00000001-0001-4001-8001-000000000007",
+      "section": "第16條第17款第4目（源碼檢測、弱點掃描及修補報告）"
+    },
+    {
+      "requirement_id": "50000001-0001-4001-8001-000000000005",
+      "version": "1.0",
+      "rule_ref": {
+        "id": "50000001-0001-4001-8001-000000000005",
+        "version": "1.0",
+        "sha256": "hash_draft_placeholder"
+      },
+      "obligation": "廠商於系統交付驗收時，應提供詳細之系統架構圖、環境安裝部署手冊、資料庫字典、管理操作指引，並對機關人員完成技術轉移教育訓練，自驗收合格日起提供一年以上保固維護",
+      "obligor": "vendor",
+      "condition": null,
+      "mandatory": true,
+      "evidence_requirements": ["完整技術文件清單", "技術轉移教育訓練簽到表與保固證明書"],
+      "deterministic_checks": [],
+      "risk_level": "medium",
+      "required_documents": ["系統部署與維護手冊", "保固責任切結書"],
+      "protected_constraints": ["保固期間至少一年以上不得任意縮減"],
+      "status": "draft",
+      "source_id": "00000001-0001-4001-8001-000000000007",
+      "section": "第8條（履約管理與技術轉移移交）"
+    }
+  ]
+}

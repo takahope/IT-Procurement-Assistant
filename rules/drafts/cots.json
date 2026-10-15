@@ -1,0 +1,255 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "pack_id": "cots",
+  "title": "套裝軟體採購資安規則包",
+  "version": "1.0",
+  "status": "draft",
+  "rules": [
+    {
+      "rule_id": "40000001-0001-4001-8001-000000000001",
+      "version": "1.0",
+      "status": "draft",
+      "title": "現成套裝軟體合法授權證明與 EULA 條款合規查核",
+      "category": "cots",
+      "requirement_text": "廠商應提供原廠出具之正式合法授權證明文件與最終使用者授權協議（EULA），明確標明授權標的、授權年限、授權人數或主機規格，且其 EULA 條款不得與我國公務採購法令相牴觸",
+      "source_refs": [
+        {
+          "id": "00000001-0001-4001-8001-000000000009",
+          "version": "114.12.30",
+          "sha256": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9"
+        }
+      ],
+      "applicability": {},
+      "mandatory": true,
+      "severity": "high",
+      "non_negotiable": true,
+      "company_position": "防止使用未經合法授權或來路不明之盜版及改版套件，杜絕軟體授權法律風險。",
+      "fallback_positions": [],
+      "deterministic_checks": [],
+      "target_sentences": ["合法授權證明", "原廠授權書", "EULA條款合規"],
+      "example_clauses": ["廠商應於驗收時交付原廠合法授權證明書及正版軟體媒體或啟用金鑰"],
+      "conflicts_with": [],
+      "supersedes": []
+    },
+    {
+      "rule_id": "40000001-0001-4001-8001-000000000002",
+      "version": "1.0",
+      "status": "draft",
+      "title": "原廠安全性弱點通報與保固期安全更新修補承諾",
+      "category": "cots",
+      "requirement_text": "廠商應於保固或維護期間內，持續追蹤原廠發布之安全漏洞公告，於原廠釋出安全性修補更新（Security Patch）時立即通報機關，並於約定期限內提供修補程式或協助部署",
+      "source_refs": [
+        {
+          "id": "00000001-0001-4001-8001-000000000009",
+          "version": "114.12.30",
+          "sha256": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9"
+        }
+      ],
+      "applicability": {},
+      "mandatory": true,
+      "severity": "high",
+      "non_negotiable": true,
+      "company_position": "商用軟體若無原廠安全更新支持，將淪為重大漏洞溫床，必須有持續更新承諾。",
+      "fallback_positions": ["若廠商為代理商，應取得原廠連帶保證或由代理商承擔第一線弱點緩解諮詢"],
+      "deterministic_checks": [],
+      "target_sentences": ["安全性更新", "弱點修補", "保固維護", "Security Patch"],
+      "example_clauses": ["保固期間內廠商應無償提供該版本軟體之重大安全性修補更新"],
+      "conflicts_with": [],
+      "supersedes": []
+    },
+    {
+      "rule_id": "40000001-0001-4001-8001-000000000003",
+      "version": "1.0",
+      "status": "draft",
+      "title": "產品生命週期與終止支援（EOL）提前預警通知",
+      "category": "cots",
+      "requirement_text": "廠商應明確標示採購軟體版本之原廠生命週期支援時程（EOL/EOS），如於履約或保固期間內原廠發布停止支援公告，廠商應於知悉後一個月內書面通知機關並提供升級或替代評估方案",
+      "source_refs": [
+        {
+          "id": "00000001-0001-4001-8001-000000000009",
+          "version": "114.12.30",
+          "sha256": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9"
+        }
+      ],
+      "applicability": {},
+      "mandatory": true,
+      "severity": "medium",
+      "non_negotiable": false,
+      "company_position": "避免機關採購即將過期或原廠不再維護之孤兒軟體（Abandonware）。",
+      "fallback_positions": ["採購時該軟體版本距原廠預定停止主流支援日應至少有一年以上期間"],
+      "deterministic_checks": [],
+      "target_sentences": ["生命週期", "EOL", "停止支援", "升級替換方案"],
+      "example_clauses": ["廠商保證所交付之軟體於驗收合格日起一年內不停止原廠標準技術支援"],
+      "conflicts_with": [],
+      "supersedes": []
+    },
+    {
+      "rule_id": "40000001-0001-4001-8001-000000000004",
+      "version": "1.0",
+      "status": "draft",
+      "title": "智財權侵權全面擔保與合理賠償責任上限設定",
+      "category": "cots",
+      "requirement_text": "廠商應擔保所交付之套裝軟體不侵害任何第三人之專利、商標、著作權或營業秘密；若遭第三人主張侵權，廠商應自負費用協助抗辯並賠償機關所受損害，且賠償責任得依標的總額設定合理上限，非無上限責任",
+      "source_refs": [
+        {
+          "id": "00000001-0001-4001-8001-000000000009",
+          "version": "114.12.30",
+          "sha256": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9"
+        }
+      ],
+      "applicability": {},
+      "mandatory": true,
+      "severity": "high",
+      "non_negotiable": false,
+      "company_position": "套裝軟體廠商應負侵權擔保責任，但賠償責任得依標的總額設定合理上限（例如契約總價一倍至兩倍），非無上限承擔間接或衍生性損害，以符商業實務合理性平衡。",
+      "fallback_positions": ["智財侵權防衛義務不得設上限，但損害賠償額得以契約總額之合理倍數為上限"],
+      "deterministic_checks": [],
+      "target_sentences": ["侵權擔保", "合理上限", "責任上限", "非無上限"],
+      "example_clauses": ["廠商擔保軟體不侵犯第三人權益，如有侵權由廠商負責抗辯，責任上限以契約總價為限"],
+      "conflicts_with": [],
+      "supersedes": []
+    },
+    {
+      "rule_id": "40000001-0001-4001-8001-000000000005",
+      "version": "1.0",
+      "status": "draft",
+      "title": "原始碼保管或交付限於客製或託管約定，不得無條件索取專有源碼",
+      "category": "cots",
+      "requirement_text": "商業套裝軟體（COTS）為現成商用產品，機關不得無條件強制要求廠商交付專有核心原始碼；僅於涉及特定客製化模組開發，或經契約專案約定第三方原始碼保管（Escrow）條件達成時，始得請求交付或取用指定原始碼",
+      "source_refs": [
+        {
+          "id": "00000001-0001-4001-8001-000000000009",
+          "version": "114.12.30",
+          "sha256": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9"
+        }
+      ],
+      "applicability": {
+        "any": [
+          {
+            "eq": ["customization_required", true]
+          },
+          {
+            "eq": ["source_code_escrow_agreed", true]
+          }
+        ]
+      },
+      "mandatory": false,
+      "severity": "medium",
+      "non_negotiable": false,
+      "company_position": "套裝軟體為現成商用套件非委外客製開發，機關不得無條件強制索取核心原始碼；若涉及客製模組或重大營運風險，應採原始碼保管託管（Escrow）或僅就客製部分交付，以兼顧商業智慧財產權與公務維運安全。",
+      "fallback_positions": ["若廠商破產解散或無故中斷維護，機關得依 Escrow 協議向託管機構調閱源碼以維持系統運作"],
+      "deterministic_checks": [],
+      "target_sentences": ["原始碼託管", "Escrow", "客製化模組交付", "非無條件索取原始碼"],
+      "example_clauses": ["就本案特別客製開發之程式碼廠商應交付原始碼，原廠標準商用核心部分由廠商辦理第三方原始碼託管保管"],
+      "conflicts_with": [],
+      "supersedes": []
+    }
+  ],
+  "requirements": [
+    {
+      "requirement_id": "40000001-0001-4001-8001-000000000001",
+      "version": "1.0",
+      "rule_ref": {
+        "id": "40000001-0001-4001-8001-000000000001",
+        "version": "1.0",
+        "sha256": "hash_draft_placeholder"
+      },
+      "obligation": "廠商應提供原廠出具之正式合法授權證明文件與最終使用者授權協議（EULA），明確標明授權標的、授權年限、授權人數或主機規格，且其 EULA 條款不得與我國公務採購法令相牴觸",
+      "obligor": "vendor",
+      "condition": null,
+      "mandatory": true,
+      "evidence_requirements": ["原廠正式授權證書", "EULA繁體中文或雙語條款"],
+      "deterministic_checks": [],
+      "risk_level": "high",
+      "required_documents": ["原廠軟體合法授權書"],
+      "protected_constraints": ["禁止使用未經原廠正式授權之第三方重新包裝版"],
+      "status": "draft",
+      "source_id": "00000001-0001-4001-8001-000000000009",
+      "section": "第16條（智財授權與EULA權利保證）"
+    },
+    {
+      "requirement_id": "40000001-0001-4001-8001-000000000002",
+      "version": "1.0",
+      "rule_ref": {
+        "id": "40000001-0001-4001-8001-000000000002",
+        "version": "1.0",
+        "sha256": "hash_draft_placeholder"
+      },
+      "obligation": "廠商應於保固或維護期間內，持續追蹤原廠發布之安全漏洞公告，於原廠釋出安全性修補更新（Security Patch）時立即通報機關，並於約定期限內提供修補程式或協助部署",
+      "obligor": "vendor",
+      "condition": null,
+      "mandatory": true,
+      "evidence_requirements": ["原廠安全更新保證條款", "修補程式提供時限約定"],
+      "deterministic_checks": [],
+      "risk_level": "high",
+      "required_documents": ["原廠保固承諾書"],
+      "protected_constraints": ["保固期內重大資安漏洞修補不得另行收取授權費"],
+      "status": "draft",
+      "source_id": "00000001-0001-4001-8001-000000000009",
+      "section": "第17條（保固期間已知漏洞通報與安全性更新提供）"
+    },
+    {
+      "requirement_id": "40000001-0001-4001-8001-000000000003",
+      "version": "1.0",
+      "rule_ref": {
+        "id": "40000001-0001-4001-8001-000000000003",
+        "version": "1.0",
+        "sha256": "hash_draft_placeholder"
+      },
+      "obligation": "廠商應明確標示採購軟體版本之原廠生命週期支援時程（EOL/EOS），如於履約或保固期間內原廠發布停止支援公告，廠商應於知悉後一個月內書面通知機關並提供升級或替代評估方案",
+      "obligor": "vendor",
+      "condition": null,
+      "mandatory": true,
+      "evidence_requirements": ["軟體版本生命週期時程表", "停止支援提前通知約定"],
+      "deterministic_checks": [],
+      "risk_level": "medium",
+      "required_documents": ["產品生命週期白皮書"],
+      "protected_constraints": ["不得交付在驗收當下已屆原廠生命週期終點之產品版本"],
+      "status": "draft",
+      "source_id": "00000001-0001-4001-8001-000000000009",
+      "section": "第8條（產品生命週期與終止支援提前六個月通知）"
+    },
+    {
+      "requirement_id": "40000001-0001-4001-8001-000000000004",
+      "version": "1.0",
+      "rule_ref": {
+        "id": "40000001-0001-4001-8001-000000000004",
+        "version": "1.0",
+        "sha256": "hash_draft_placeholder"
+      },
+      "obligation": "廠商應擔保所交付之套裝軟體不侵害任何第三人之專利、商標、著作權或營業秘密；若遭第三人主張侵權，廠商應自負費用協助抗辯並賠償機關所受損害，且賠償責任得依標的總額設定合理上限，非無上限責任",
+      "obligor": "vendor",
+      "condition": null,
+      "mandatory": true,
+      "evidence_requirements": ["智財侵權擔保與抗辯條款", "合理損害賠償責任上限條款"],
+      "deterministic_checks": [],
+      "risk_level": "high",
+      "required_documents": ["智財權合法擔保切結書"],
+      "protected_constraints": ["侵權抗辯義務不得免除，賠償責任上限應具商業合理性"],
+      "status": "draft",
+      "source_id": "00000001-0001-4001-8001-000000000009",
+      "section": "第16條（第三人專利或著作權侵權責任與賠償責任上限）"
+    },
+    {
+      "requirement_id": "40000001-0001-4001-8001-000000000005",
+      "version": "1.0",
+      "rule_ref": {
+        "id": "40000001-0001-4001-8001-000000000005",
+        "version": "1.0",
+        "sha256": "hash_draft_placeholder"
+      },
+      "obligation": "套裝軟體（COTS）屬現成商用套件，不得無條件強制廠商交付核心專有原始碼；如涉及特定客製模組或系統關鍵維運風險，應約定僅就客製化部分交付原始碼，或約定辦理第三方原始碼託管保管（Escrow）",
+      "obligor": "vendor",
+      "condition": "{\"any\": [{\"eq\": [\"customization_required\", true]}, {\"eq\": [\"source_code_escrow_agreed\", true]}]}",
+      "mandatory": false,
+      "evidence_requirements": ["客製化原始碼交付約定或第三方 Escrow 託管協議條款"],
+      "deterministic_checks": [],
+      "risk_level": "medium",
+      "required_documents": ["原始碼託管保管協議書（如適用）"],
+      "protected_constraints": ["不得無條件將商用專有源碼全量索取作為通用採購驗收條件"],
+      "status": "draft",
+      "source_id": "00000001-0001-4001-8001-000000000009",
+      "section": "第16條（原始碼保管條款：限客製化開發或經約定之原始碼託管Escrow）"
+    }
+  ]
+}

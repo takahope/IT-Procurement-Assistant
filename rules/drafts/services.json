@@ -1,0 +1,248 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "pack_id": "services",
+  "title": "資訊服務勞務採購資安規則包",
+  "version": "1.0",
+  "status": "draft",
+  "rules": [
+    {
+      "rule_id": "20000001-0001-4001-8001-000000000001",
+      "version": "1.0",
+      "status": "draft",
+      "title": "遠端連線維護例外嚴格管制與到場維護原則",
+      "category": "services",
+      "requirement_text": "資訊系統維運服務以到場實體維護為原則；如確有遠端連線維護必要，屬例外狀況，必須事前專案簽准，並限制來源IP、採雙因子認證、端到端加密通道，且全程即時側錄以供稽核",
+      "source_refs": [
+        {
+          "id": "00000001-0001-4001-8001-000000000005",
+          "version": "115.09.07",
+          "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+        }
+      ],
+      "applicability": {
+        "eq": ["remote_access", true]
+      },
+      "mandatory": true,
+      "severity": "high",
+      "non_negotiable": true,
+      "company_position": "院內規範明定委外維護原則到場，遠端為例外且須嚴格管制，絕不允許永久無管制的遠端跳板。",
+      "fallback_positions": ["若無法到場，遠端維護連線必須每次連線前逐案申請並於維護結束後立即中斷帳號權限"],
+      "deterministic_checks": [],
+      "target_sentences": ["到場維護為原則", "遠端維護為例外", "雙因子認證", "連線側錄"],
+      "example_clauses": ["廠商進行系統維護應以派員到場為原則，未經機關專案許可不得以遠端連線方式進行"],
+      "conflicts_with": [],
+      "supersedes": []
+    },
+    {
+      "rule_id": "20000001-0001-4001-8001-000000000002",
+      "version": "1.0",
+      "status": "draft",
+      "title": "派駐維護人員資通安全審查、保密切結與離職帳號管理",
+      "category": "services",
+      "requirement_text": "廠商指派之駐點或維護人員應通過機關安全查核、簽署個人保密切結，且人員異動或離職時應於一個工作日內通知機關辦理權限變更或廢止",
+      "source_refs": [
+        {
+          "id": "00000001-0001-4001-8001-000000000007",
+          "version": "113.12.26",
+          "sha256": "8f434346648f6b96df89dda901c5176b10a6d83961dd3c1ac88b59b2dc327aa4"
+        }
+      ],
+      "applicability": {},
+      "mandatory": true,
+      "severity": "medium",
+      "non_negotiable": false,
+      "company_position": "派駐或維護人員具備特權存取身分，必須控管人員異動與權限即時廢止。",
+      "fallback_positions": [],
+      "deterministic_checks": [],
+      "target_sentences": ["履約人員身分查核", "保密切結", "離職帳號刪除"],
+      "example_clauses": ["廠商派駐人員離職時，應於生效日前通知機關刪除帳號及收回識別證件"],
+      "conflicts_with": [],
+      "supersedes": []
+    },
+    {
+      "rule_id": "20000001-0001-4001-8001-000000000003",
+      "version": "1.0",
+      "status": "draft",
+      "title": "資訊服務特別資通安全專項責任條款落實",
+      "category": "services",
+      "requirement_text": "契約應完整納入行政院公共工程委員會資訊服務採購契約範本第16條第17款所列資通安全特別責任，包含資通安全維護計畫、弱點修補、事件通報及損害賠償義務",
+      "source_refs": [
+        {
+          "id": "00000001-0001-4001-8001-000000000007",
+          "version": "113.12.26",
+          "sha256": "8f434346648f6b96df89dda901c5176b10a6d83961dd3c1ac88b59b2dc327aa4"
+        }
+      ],
+      "applicability": {},
+      "mandatory": true,
+      "severity": "high",
+      "non_negotiable": true,
+      "company_position": "第16條第17款為資訊服務採購契約資安專項責任，不得刪除或實質減免。",
+      "fallback_positions": [],
+      "deterministic_checks": [],
+      "target_sentences": ["第16條第17款", "資通安全特別責任", "資通安全維護計畫"],
+      "example_clauses": ["契約第16條第17款：廠商辦理資訊服務應履行之資通安全責任如下"],
+      "conflicts_with": [],
+      "supersedes": []
+    },
+    {
+      "rule_id": "20000001-0001-4001-8001-000000000004",
+      "version": "1.0",
+      "status": "draft",
+      "title": "服務水準保證（SLA）明確訂定與異常中斷處罰",
+      "category": "services",
+      "requirement_text": "資訊維護服務應明訂可用度、故障回應時效及修復時限等服務水準協議（SLA），未達約定水準或造成系統無預警中斷者，應負遲延違約金及損害賠償責任",
+      "source_refs": [
+        {
+          "id": "00000001-0001-4001-8001-000000000007",
+          "version": "113.12.26",
+          "sha256": "8f434346648f6b96df89dda901c5176b10a6d83961dd3c1ac88b59b2dc327aa4"
+        }
+      ],
+      "applicability": {},
+      "mandatory": true,
+      "severity": "medium",
+      "non_negotiable": false,
+      "company_position": "維運服務之品質保證必須有量化指標與明確中斷罰則約束。",
+      "fallback_positions": ["得以工作說明書或SLA附表詳細規定各級障礙回應及修復時效"],
+      "deterministic_checks": [],
+      "target_sentences": ["服務水準", "SLA", "修復時效", "懲罰性違約金"],
+      "example_clauses": ["系統障礙應於通報後2小時內回應，4小時內排除，逾期依契約第17條計罰"],
+      "conflicts_with": [],
+      "supersedes": []
+    },
+    {
+      "rule_id": "20000001-0001-4001-8001-000000000005",
+      "version": "1.0",
+      "status": "draft",
+      "title": "履約終止之資通資產移交與資料銷毀證明開具",
+      "category": "services",
+      "requirement_text": "服務期間屆滿、終止或解除時，廠商應返還機關所有資通資產及資料複本，並將儲存於廠商設備之相關資料安全抹除，並出具經機關認可之銷毀切結證明文件",
+      "source_refs": [
+        {
+          "id": "00000001-0001-4001-8001-000000000007",
+          "version": "113.12.26",
+          "sha256": "8f434346648f6b96df89dda901c5176b10a6d83961dd3c1ac88b59b2dc327aa4"
+        }
+      ],
+      "applicability": {},
+      "mandatory": true,
+      "severity": "high",
+      "non_negotiable": true,
+      "company_position": "退場資料銷毀是防止機關資料在合約終止後殘留外洩之必要關卡。",
+      "fallback_positions": [],
+      "deterministic_checks": [],
+      "target_sentences": ["資料返還", "安全銷毀", "出具銷毀證明"],
+      "example_clauses": ["合約終止時廠商應交付銷毀證明書，確認所有機關檔案與暫存資料均已抹除"],
+      "conflicts_with": [],
+      "supersedes": []
+    }
+  ],
+  "requirements": [
+    {
+      "requirement_id": "20000001-0001-4001-8001-000000000001",
+      "version": "1.0",
+      "rule_ref": {
+        "id": "20000001-0001-4001-8001-000000000001",
+        "version": "1.0",
+        "sha256": "hash_draft_placeholder"
+      },
+      "obligation": "資訊系統維運服務以到場實體維護為原則；如確有遠端連線維護必要，屬例外狀況，必須事前專案簽准，並限制來源IP、採雙因子認證、端到端加密通道，且全程即時側錄以供稽核",
+      "obligor": "vendor",
+      "condition": "{\"eq\": [\"remote_access\", true]}",
+      "mandatory": true,
+      "evidence_requirements": ["合約明載以到場為原則", "遠端維護例外管制作業規定與側錄稽核條款"],
+      "deterministic_checks": [],
+      "risk_level": "high",
+      "required_documents": ["遠端維護申請單範本", "遠端存取資安切結書"],
+      "protected_constraints": ["禁止免申請常態開放外部連線維護"],
+      "status": "draft",
+      "source_id": "00000001-0001-4001-8001-000000000005",
+      "section": "第14點（委外維護以到場為原則，遠端為例外嚴管且須加密與側錄稽核）"
+    },
+    {
+      "requirement_id": "20000001-0001-4001-8001-000000000002",
+      "version": "1.0",
+      "rule_ref": {
+        "id": "20000001-0001-4001-8001-000000000002",
+        "version": "1.0",
+        "sha256": "hash_draft_placeholder"
+      },
+      "obligation": "廠商指派之駐點或維護人員應通過機關安全查核、簽署個人保密切結，且人員異動或離職時應於一個工作日內通知機關辦理權限變更或廢止",
+      "obligor": "vendor",
+      "condition": null,
+      "mandatory": true,
+      "evidence_requirements": ["人員審查與切結條款", "人員離退帳號廢止程序"],
+      "deterministic_checks": [],
+      "risk_level": "medium",
+      "required_documents": ["人員資安守則承諾書"],
+      "protected_constraints": ["人員離職通知時限最長不得超過三個工作日"],
+      "status": "draft",
+      "source_id": "00000001-0001-4001-8001-000000000007",
+      "section": "第8條（履約管理）"
+    },
+    {
+      "requirement_id": "20000001-0001-4001-8001-000000000003",
+      "version": "1.0",
+      "rule_ref": {
+        "id": "20000001-0001-4001-8001-000000000003",
+        "version": "1.0",
+        "sha256": "hash_draft_placeholder"
+      },
+      "obligation": "契約應完整納入行政院公共工程委員會資訊服務採購契約範本第16條第17款所列資通安全特別責任，包含資通安全維護計畫、弱點修補、事件通報及損害賠償義務",
+      "obligor": "vendor",
+      "condition": null,
+      "mandatory": true,
+      "evidence_requirements": ["契約第16條第17款專項條款"],
+      "deterministic_checks": [],
+      "risk_level": "high",
+      "required_documents": ["資通安全責任切結書"],
+      "protected_constraints": ["契約範本第16條第17款核心內容不得任意排除"],
+      "status": "draft",
+      "source_id": "00000001-0001-4001-8001-000000000007",
+      "section": "第16條第17款（資通安全責任）"
+    },
+    {
+      "requirement_id": "20000001-0001-4001-8001-000000000004",
+      "version": "1.0",
+      "rule_ref": {
+        "id": "20000001-0001-4001-8001-000000000004",
+        "version": "1.0",
+        "sha256": "hash_draft_placeholder"
+      },
+      "obligation": "資訊維護服務應明訂可用度、故障回應時效及修復時限等服務水準協議（SLA），未達約定水準或造成系統無預警中斷者，應負遲延違約金及損害賠償責任",
+      "obligor": "vendor",
+      "condition": null,
+      "mandatory": true,
+      "evidence_requirements": ["服務水準協議SLA條款或附件", "違約扣罰標準"],
+      "deterministic_checks": [],
+      "risk_level": "medium",
+      "required_documents": ["SLA服務水準量測表"],
+      "protected_constraints": ["不可約定完全免除廠商非不可抗力之系統中斷責任"],
+      "status": "draft",
+      "source_id": "00000001-0001-4001-8001-000000000007",
+      "section": "第17條（遲延違約金與服務中斷罰則）"
+    },
+    {
+      "requirement_id": "20000001-0001-4001-8001-000000000005",
+      "version": "1.0",
+      "rule_ref": {
+        "id": "20000001-0001-4001-8001-000000000005",
+        "version": "1.0",
+        "sha256": "hash_draft_placeholder"
+      },
+      "obligation": "服務期間屆滿、終止或解除時，廠商應返還機關所有資通資產及資料複本，並將儲存於廠商設備之相關資料安全抹除，並出具經機關認可之銷毀切結證明文件",
+      "obligor": "vendor",
+      "condition": null,
+      "mandatory": true,
+      "evidence_requirements": ["退場資料交接條款", "資料安全抹除與銷毀證明條款"],
+      "deterministic_checks": [],
+      "risk_level": "high",
+      "required_documents": ["資料銷毀證明書"],
+      "protected_constraints": ["廠商不得藉口留存機關資料作為自身資產或備份"],
+      "status": "draft",
+      "source_id": "00000001-0001-4001-8001-000000000007",
+      "section": "第16條第17款（履約終止之資料返還或銷毀證明）"
+    }
+  ]
+}
