@@ -1,7 +1,11 @@
 import hashlib
+import json
+import os
 import re
 import uuid
 from dataclasses import dataclass, field
+
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 from procurement_review.domain.models import (
     DetectedSpan,
@@ -13,12 +17,16 @@ from procurement_review.masking.detector import Detector
 
 # 動態為 MaskingSession 擴充 blocked 與 block_reason 存取屬性，確保相容性
 def _get_blocked(self: MaskingSession) -> bool:
-    return "SECRET_DETECTED" in self.blocking_reasons or len(self.blocking_reasons) > 0
+    return (
+        "SECRET_DETECTED" in self.blocking_reasons
+        or "ROUNDTRIP_MISMATCH" in self.blocking_reasons
+        or len(self.blocking_reasons) > 0
+    )
 
 
 def _set_blocked(self: MaskingSession, val: bool) -> None:
     if val:
-        if "SECRET_DETECTED" not in self.blocking_reasons:
+        if not self.blocking_reasons:
             self.blocking_reasons.append("SECRET_DETECTED")
     else:
         self.blocking_reasons.clear()
@@ -33,11 +41,31 @@ def _set_block_reason(self: MaskingSession, reason: str | None) -> None:
         self.blocking_reasons.append(reason)
 
 
+def _get_session_actor(self: MaskingSession) -> str:
+    mapping = get_session_mapping(self.session_id)
+    if mapping and mapping.actor:
+        return mapping.actor
+    if self.manual_tagging_version and "-annotated-by-" in self.manual_tagging_version:
+        return self.manual_tagging_version.split("-annotated-by-")[-1]
+    return "system"
+
+
+def _get_session_spans(self: MaskingSession) -> list[DetectedSpan]:
+    mapping = get_session_mapping(self.session_id)
+    return mapping.spans if mapping else []
+
+
 if not hasattr(MaskingSession, "blocked"):
     MaskingSession.blocked = property(_get_blocked, _set_blocked)
 
 if not hasattr(MaskingSession, "block_reason"):
     MaskingSession.block_reason = property(_get_block_reason, _set_block_reason)
+
+if not hasattr(MaskingSession, "actor"):
+    MaskingSession.actor = property(_get_session_actor)
+
+if not hasattr(MaskingSession, "spans"):
+    MaskingSession.spans = property(_get_session_spans)
 
 
 @dataclass
@@ -46,22 +74,99 @@ class SessionMapping:
 
     session_id: str
     case_id: str
+    actor: str = "system"
     token_to_original: dict[str, str] = field(default_factory=dict)
     original_to_token: dict[tuple[str, str], str] = field(default_factory=dict)
     literal_escapes: set[str] = field(default_factory=set)
     spans: list[DetectedSpan] = field(default_factory=list)
 
 
-# 本機記憶體 Vault 儲存庫（以 session_id 為索引）
-_VAULT_STORE: dict[str, SessionMapping] = {}
+@dataclass
+class EncryptedMappingRecord:
+    """Vault 中以 AES-256-GCM 加密之對照表紀錄"""
+
+    session_id: str
+    case_id: str
+    nonce: bytes
+    ciphertext: bytes
+
+
+_VAULT_KEY_ENV = os.environ.get("MASKING_VAULT_KEY")
+if _VAULT_KEY_ENV and len(_VAULT_KEY_ENV.encode("utf-8")) == 32:
+    _VAULT_KEY: bytes = _VAULT_KEY_ENV.encode("utf-8")
+else:
+    _VAULT_KEY: bytes = AESGCM.generate_key(bit_length=256)
+
+
+# 本機記憶體 Vault 儲存庫（儲存 AES-256-GCM 加密記錄）
+_VAULT_STORE: dict[str, EncryptedMappingRecord] = {}
+
+
+def get_vault_key() -> bytes:
+    return _VAULT_KEY
+
+
+def set_vault_key(key: bytes) -> None:
+    global _VAULT_KEY
+    if len(key) != 32:
+        raise ValueError("Vault key must be 32 bytes (256 bits)")
+    _VAULT_KEY = key
+
+
+def _serialize_session_mapping(mapping: SessionMapping) -> bytes:
+    payload = {
+        "session_id": mapping.session_id,
+        "case_id": mapping.case_id,
+        "actor": mapping.actor,
+        "token_to_original": mapping.token_to_original,
+        "original_to_token": [
+            [k[0], k[1], v] for k, v in mapping.original_to_token.items()
+        ],
+        "literal_escapes": sorted(mapping.literal_escapes),
+        "spans": [s.model_dump() for s in mapping.spans],
+    }
+    return json.dumps(payload, ensure_ascii=False).encode("utf-8")
+
+
+def _deserialize_session_mapping(raw_bytes: bytes) -> SessionMapping:
+    data = json.loads(raw_bytes.decode("utf-8"))
+    spans = [DetectedSpan.model_validate(s) for s in data.get("spans", [])]
+    orig_to_tok = {
+        (item[0], item[1]): item[2] for item in data.get("original_to_token", [])
+    }
+    return SessionMapping(
+        session_id=data["session_id"],
+        case_id=data["case_id"],
+        actor=data.get("actor", "system"),
+        token_to_original=data.get("token_to_original", {}),
+        original_to_token=orig_to_tok,
+        literal_escapes=set(data.get("literal_escapes", [])),
+        spans=spans,
+    )
 
 
 def get_session_mapping(session_id: str) -> SessionMapping | None:
-    return _VAULT_STORE.get(session_id)
+    record = _VAULT_STORE.get(session_id)
+    if record is None:
+        return None
+    aesgcm = AESGCM(_VAULT_KEY)
+    aad = f"{record.case_id}:{record.session_id}".encode()
+    plaintext = aesgcm.decrypt(record.nonce, record.ciphertext, aad)
+    return _deserialize_session_mapping(plaintext)
 
 
 def save_session_mapping(mapping: SessionMapping) -> None:
-    _VAULT_STORE[mapping.session_id] = mapping
+    aesgcm = AESGCM(_VAULT_KEY)
+    nonce = os.urandom(12)
+    aad = f"{mapping.case_id}:{mapping.session_id}".encode()
+    plaintext = _serialize_session_mapping(mapping)
+    ciphertext = aesgcm.encrypt(nonce, plaintext, aad)
+    _VAULT_STORE[mapping.session_id] = EncryptedMappingRecord(
+        session_id=mapping.session_id,
+        case_id=mapping.case_id,
+        nonce=nonce,
+        ciphertext=ciphertext,
+    )
 
 
 LITERAL_TOKEN_PATTERNS = [
@@ -83,6 +188,7 @@ def mask(
     - 同一會話內同名實體共用相同 token
     - 轉義原文既有的假 token（例如 <PERSON_1>），避免還原污染
     - 高機密秘密（API key / 密碼 / 金鑰）發現即標記 blocked 並記錄 SECRET_DETECTED，不放行出站
+    - 人工審查標註（human_reviewed=True 且 mapping.spans 存在）不被 detector 重新覆寫
     """
     mapping = get_session_mapping(session.session_id)
     if mapping is None:
@@ -93,9 +199,12 @@ def mask(
         for m in pat.finditer(draft.plaintext_body):
             mapping.literal_escapes.add(m.group(0))
 
-    # 2. 偵測 PII 與機敏資訊區間
-    spans = detector.detect(draft.plaintext_body)
-    mapping.spans = spans
+    # 2. 偵測 PII 與機敏資訊區間（若已經過人工審查標註且已存在 spans，不被 detector.detect 覆寫）
+    if session.human_reviewed and mapping.spans:
+        spans = mapping.spans
+    else:
+        spans = detector.detect(draft.plaintext_body)
+        mapping.spans = spans
 
     # 3. 檢查機密阻止條件 (Secret Blocking)
     has_secret = False
@@ -108,6 +217,8 @@ def mask(
         if "SECRET_DETECTED" not in session.blocking_reasons:
             session.blocking_reasons.append("SECRET_DETECTED")
         session.roundtrip_ok = False
+    elif "SECRET_DETECTED" in session.blocking_reasons:
+        session.blocking_reasons.remove("SECRET_DETECTED")
 
     # 4. 進行文字遮罩替換
     # 按照 start_offset 排序以精確切片組裝
@@ -133,7 +244,7 @@ def mask(
     pieces.append(draft.plaintext_body[last_idx:])
     masked_body = "".join(pieces)
 
-    # 5. 儲存對照映射至 Vault
+    # 5. 儲存對照映射至 Vault (AES-256-GCM 加密)
     save_session_mapping(mapping)
 
     # 6. 計算出站內容雜湊
@@ -146,6 +257,13 @@ def mask(
         check_res = restore(masked_body, session)
         if check_res.text == draft.plaintext_body:
             session.roundtrip_ok = True
+            if "ROUNDTRIP_MISMATCH" in session.blocking_reasons:
+                session.blocking_reasons.remove("ROUNDTRIP_MISMATCH")
+        else:
+            session.roundtrip_ok = False
+            session.blocked = True
+            if "ROUNDTRIP_MISMATCH" not in session.blocking_reasons:
+                session.blocking_reasons.append("ROUNDTRIP_MISMATCH")
 
     # 8. 建立遮罩後的新 OutboundDraft
     new_draft = OutboundDraft(
@@ -167,12 +285,21 @@ def apply_annotations(
 ) -> MaskingSession:
     """套用人工標註或修正（補遮／放回），建立全新 session_id 使舊出站核准失效。"""
     new_session_id = str(uuid.uuid4())
-    version_label = manual_version or f"manual-{uuid.uuid4().hex[:6]}"
+    if manual_version:
+        version_label = (
+            manual_version
+            if actor in manual_version
+            else f"{manual_version}-annotated-by-{actor}"
+        )
+    else:
+        base = session.manual_tagging_version or "v1.0"
+        version_label = f"{base}-annotated-by-{actor}"
 
     old_mapping = get_session_mapping(session.session_id)
     new_mapping = SessionMapping(
         session_id=new_session_id,
         case_id=session.case_id,
+        actor=actor,
         literal_escapes=set(old_mapping.literal_escapes) if old_mapping else set(),
         spans=spans,
     )

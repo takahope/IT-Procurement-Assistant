@@ -10,7 +10,12 @@ from procurement_review.domain.models import (
 from procurement_review.masking.detector import Detector, RuleBasedDetector
 from procurement_review.masking.pii_guard_adapter import PIIGuardAdapter
 from procurement_review.masking.restoration import restore
-from procurement_review.masking.session import apply_annotations, mask
+from procurement_review.masking.session import (
+    _VAULT_STORE,
+    apply_annotations,
+    get_session_mapping,
+    mask,
+)
 
 
 def _make_draft(text: str) -> OutboundDraft:
@@ -224,5 +229,164 @@ def test_apply_annotations_creates_new_session_invalidating_old():
 
     assert new_session.session_id != old_session_id
     assert new_session.case_id == masked_session.case_id
-    assert new_session.manual_tagging_version == "v2.0"
+    assert "v2.0" in new_session.manual_tagging_version
+    assert "senior_reviewer" in new_session.manual_tagging_version
     assert new_session.human_reviewed is True
+
+
+def test_mask_preserves_human_annotations_without_reset():
+    detector = RuleBasedDetector()
+    text = "專案經理陳大文出席會議，聯絡電話為 0912-345-678。"
+    draft = _make_draft(text)
+    session = _make_session()
+
+    _raw_draft, first_session = mask(draft, session, detector)
+    assert len(first_session.spans) >= 2  # detects 陳大文 and phone
+
+    # Reviewer decides to ONLY annotate 陳大文 (e.g. phone is public hotline, or adds custom annotation)
+    manual_span = DetectedSpan(
+        span_id=str(uuid.uuid4()),
+        span_type="PERSON",
+        entity_group="PII",
+        source_span=SourceSpan(
+            document_id="00000000-0000-0000-0000-000000000000",
+            block_id="00000000-0000-0000-0000-000000000000",
+            start_offset=4,
+            end_offset=7,
+        ),
+        original_text="陳大文",
+        masked_token="",
+        confidence=1.0,
+    )
+
+    annotated_session = apply_annotations(
+        first_session,
+        [manual_span],
+        actor="lead_auditor",
+        manual_version="v2.0",
+    )
+    assert annotated_session.human_reviewed is True
+
+    # Re-run mask on the draft with annotated_session
+    second_draft, second_session = mask(draft, annotated_session, detector)
+
+    # Must preserve human annotations: only 1 sensitive token, phone remains unmasked
+    assert second_draft.sensitive_token_count == 1
+    assert "0912-345-678" in second_draft.plaintext_body
+    assert "陳大文" not in second_draft.plaintext_body
+    assert len(second_session.spans) == 1
+    assert second_session.spans[0].original_text == "陳大文"
+
+
+def test_actor_persisted_in_session_and_mapping():
+    detector = RuleBasedDetector()
+    text = "專案經理陳大文出席會議。"
+    draft = _make_draft(text)
+    session = _make_session()
+
+    _masked_draft, masked_session = mask(draft, session, detector)
+
+    manual_span = DetectedSpan(
+        span_id=str(uuid.uuid4()),
+        span_type="PERSON",
+        entity_group="PII",
+        source_span=SourceSpan(
+            document_id="00000000-0000-0000-0000-000000000000",
+            block_id="00000000-0000-0000-0000-000000000000",
+            start_offset=4,
+            end_offset=7,
+        ),
+        original_text="陳大文",
+        masked_token="",
+        confidence=1.0,
+    )
+
+    actor_name = "legal_officer_alice"
+    new_session = apply_annotations(
+        masked_session,
+        [manual_span],
+        actor=actor_name,
+        manual_version="v1.1",
+    )
+
+    assert new_session.actor == actor_name
+    assert actor_name in new_session.manual_tagging_version
+
+    mapping = get_session_mapping(new_session.session_id)
+    assert mapping is not None
+    assert mapping.actor == actor_name
+
+
+def test_chinese_adjacent_word_boundary_detection():
+    detector = RuleBasedDetector()
+    # No whitespace between Chinese characters and ROC ID / AWS Key
+    text = "身分證A123456789與金鑰AKIAIOSFODNN7EXAMPLE不可洩漏。"
+    spans = detector.detect(text)
+
+    types = {s.span_type for s in spans}
+    assert "ID_NUMBER" in types
+    assert "SECRET" in types
+
+    roc_span = next(s for s in spans if s.span_type == "ID_NUMBER")
+    assert roc_span.original_text == "A123456789"
+    assert roc_span.source_span.start_offset == text.index("A123456789")
+    assert roc_span.source_span.end_offset == text.index("A123456789") + 10
+
+    secret_span = next(s for s in spans if s.span_type == "SECRET")
+    assert secret_span.original_text == "AKIAIOSFODNN7EXAMPLE"
+    assert secret_span.source_span.start_offset == text.index("AKIAIOSFODNN7EXAMPLE")
+    assert secret_span.source_span.end_offset == text.index("AKIAIOSFODNN7EXAMPLE") + 20
+
+
+def test_vault_store_ciphertext_encryption():
+    detector = RuleBasedDetector()
+    entity_name = "張大千"
+    text = f"承辦人：{entity_name}先生，電話：0912-345-678。"
+    draft = _make_draft(text)
+    session = _make_session()
+
+    _masked_draft, masked_session = mask(draft, session, detector)
+
+    # Check the underlying stored record in _VAULT_STORE
+    assert masked_session.session_id in _VAULT_STORE
+    record = _VAULT_STORE[masked_session.session_id]
+
+    # Verify that the stored ciphertext is bytes and does not contain plaintext entity names or phone
+    assert isinstance(record.ciphertext, bytes)
+    assert entity_name.encode("utf-8") not in record.ciphertext
+    assert b"0912-345-678" not in record.ciphertext
+    assert "張大千".encode() not in record.ciphertext
+
+    # Decrypting via get_session_mapping successfully returns original text
+    mapping = get_session_mapping(masked_session.session_id)
+    assert mapping is not None
+    original_texts = [s.original_text for s in mapping.spans]
+    assert any("張大千" in t for t in original_texts)
+
+
+def test_roundtrip_mismatch_blocking(monkeypatch):
+    detector = RuleBasedDetector()
+    text = "專案經理陳大文確認。"
+    draft = _make_draft(text)
+    session = _make_session()
+
+    # Simulate restoration returning corrupted text
+    from procurement_review.domain.models import RestorationResult
+
+    def corrupted_restore(*args, **kwargs):
+        return RestorationResult(
+            text="CORRUPTED TEXT",
+            unknown_tokens=[],
+            wrong_case_tokens=[],
+            adoptable=True,
+        )
+
+    # Monkeypatch restore inside procurement_review.masking.restoration
+    import procurement_review.masking.restoration as rest_module
+
+    monkeypatch.setattr(rest_module, "restore", corrupted_restore)
+
+    _masked_draft, updated_session = mask(draft, session, detector)
+    assert updated_session.roundtrip_ok is False
+    assert updated_session.blocked is True
+    assert "ROUNDTRIP_MISMATCH" in updated_session.blocking_reasons

@@ -47,6 +47,66 @@ def test_detector_contract_pii_guard_adapter():
     _assert_valid_detected_spans(spans, text)
 
 
+def test_detector_contract_pii_guard_adapter_mock_positive(monkeypatch):
+    """模擬 pii_guard 模組已安裝並回傳偵測項目，驗證 PIIGuardAdapter 正確轉接為 DetectedSpan 物件。"""
+    import sys
+    from unittest.mock import MagicMock
+
+    mock_module = MagicMock()
+    text = "專案經理：林大華先生，聯絡電話：0912-345-678。"
+
+    start_person = text.index("林大華")
+    end_person = start_person + len("林大華")
+    start_phone = text.index("0912-345-678")
+    end_phone = start_phone + len("0912-345-678")
+
+    # 模擬外部 pii_guard 庫回傳的偵測結果字典結構
+    mock_module.detect.return_value = [
+        {
+            "type": "PERSON",
+            "group": "PII",
+            "start": start_person,
+            "end": end_person,
+            "text": "林大華",
+            "score": 0.98,
+        },
+        {
+            "type": "PHONE",
+            "group": "CONTACT",
+            "start": start_phone,
+            "end": end_phone,
+            "text": "0912-345-678",
+            "score": 0.95,
+        },
+    ]
+
+    monkeypatch.setitem(sys.modules, "pii_guard", mock_module)
+
+    adapter = PIIGuardAdapter(enable_pii_guard=True)
+    assert adapter.is_pii_guard_available() is True
+    info = adapter.get_detector_info()
+    assert info["engine"] == "pii-guard"
+    assert info["fallback_active"] is False
+
+    spans = adapter.detect(text)
+    assert len(spans) == 2
+    _assert_valid_detected_spans(spans, text)
+
+    assert spans[0].span_type == "PERSON"
+    assert spans[0].entity_group == "PII"
+    assert spans[0].original_text == "林大華"
+    assert spans[0].source_span.start_offset == start_person
+    assert spans[0].source_span.end_offset == end_person
+    assert spans[0].confidence == 0.98
+
+    assert spans[1].span_type == "PHONE"
+    assert spans[1].entity_group == "CONTACT"
+    assert spans[1].original_text == "0912-345-678"
+    assert spans[1].source_span.start_offset == start_phone
+    assert spans[1].source_span.end_offset == end_phone
+    assert spans[1].confidence == 0.95
+
+
 def test_detector_contract_purely_offline(monkeypatch):
     # Ensure no network socket connections occur during detection
     def guarded_connect(*args, **kwargs):

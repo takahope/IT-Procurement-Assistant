@@ -1,10 +1,80 @@
 import logging
+import uuid
 from typing import Any
 
-from procurement_review.domain.models import DetectedSpan
+from procurement_review.domain.models import DetectedSpan, SourceSpan
 from procurement_review.masking.detector import Detector, RuleBasedDetector
 
 logger = logging.getLogger(__name__)
+
+
+def _adapt_item_to_detected_span(item: Any, text: str) -> DetectedSpan | None:
+    if isinstance(item, DetectedSpan):
+        return item
+
+    dummy_id = "00000000-0000-0000-0000-000000000000"
+    if isinstance(item, dict):
+        sp_type = item.get("span_type") or item.get("type") or item.get("entity_type", "PII")
+        start = item.get("start_offset", item.get("start", 0))
+        end = item.get("end_offset", item.get("end", 0))
+        orig = item.get("original_text", item.get("text", text[start:end]))
+        group = item.get(
+            "entity_group",
+            item.get("group", "SECRET" if sp_type == "SECRET" else "PII"),
+        )
+        conf = float(item.get("confidence", item.get("score", 1.0)))
+        raw_id = item.get("span_id")
+        try:
+            span_id = str(uuid.UUID(str(raw_id)))
+        except (ValueError, TypeError):
+            span_id = str(uuid.uuid4())
+
+        return DetectedSpan(
+            span_id=span_id,
+            span_type=str(sp_type),
+            entity_group=str(group),
+            source_span=SourceSpan(
+                document_id=dummy_id,
+                block_id=dummy_id,
+                start_offset=int(start),
+                end_offset=int(end),
+            ),
+            original_text=str(orig),
+            masked_token=item.get("masked_token", ""),
+            confidence=conf,
+        )
+
+    if hasattr(item, "start") and hasattr(item, "end"):
+        start = item.start
+        end = item.end
+        sp_type = getattr(item, "entity_type", getattr(item, "type", "PII"))
+        group = getattr(
+            item, "entity_group", getattr(item, "group", "SECRET" if sp_type == "SECRET" else "PII")
+        )
+        orig = getattr(item, "text", text[start:end])
+        conf = float(getattr(item, "confidence", getattr(item, "score", 1.0)))
+        raw_id = getattr(item, "span_id", None)
+        try:
+            span_id = str(uuid.UUID(str(raw_id)))
+        except (ValueError, TypeError):
+            span_id = str(uuid.uuid4())
+
+        return DetectedSpan(
+            span_id=span_id,
+            span_type=str(sp_type),
+            entity_group=str(group),
+            source_span=SourceSpan(
+                document_id=dummy_id,
+                block_id=dummy_id,
+                start_offset=int(start),
+                end_offset=int(end),
+            ),
+            original_text=str(orig),
+            masked_token=getattr(item, "masked_token", ""),
+            confidence=conf,
+        )
+
+    return None
 
 
 class PIIGuardAdapter:
@@ -55,10 +125,14 @@ class PIIGuardAdapter:
                 # and map to standard DetectedSpan objects
                 if hasattr(self._pii_guard_module, "detect"):
                     results = self._pii_guard_module.detect(text)
-                    if isinstance(results, list) and all(
-                        isinstance(r, DetectedSpan) for r in results
-                    ):
-                        return results
+                    if isinstance(results, list):
+                        spans: list[DetectedSpan] = []
+                        for r in results:
+                            span = _adapt_item_to_detected_span(r, text)
+                            if span is not None:
+                                spans.append(span)
+                        if spans:
+                            return spans
             except (TypeError, ValueError, AttributeError, RuntimeError) as exc:
                 logger.warning("pii-guard detection error, falling back to rule-based: %s", exc)
 

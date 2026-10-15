@@ -148,36 +148,40 @@ class RuleBasedDetector:
             raw_spans.append((m.start(), m.end(), "SECRET", "SECRET", 1.0))
 
         # AWS Access Key ID
-        aws_pat = re.compile(r"\bAKIA[0-9A-Z]{16}\b")
+        aws_pat = re.compile(r"(?<![A-Za-z0-9])AKIA[0-9A-Z]{16}(?![A-Za-z0-9])")
         for m in aws_pat.finditer(text):
             raw_spans.append((m.start(), m.end(), "SECRET", "SECRET", 1.0))
 
         # GitHub Tokens
-        gh_pat = re.compile(r"\b(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9_]{36,}\b")
+        gh_pat = re.compile(
+            r"(?<![A-Za-z0-9_])(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9_]{36,}(?![A-Za-z0-9_])"
+        )
         for m in gh_pat.finditer(text):
             raw_spans.append((m.start(), m.end(), "SECRET", "SECRET", 1.0))
 
         # Bearer tokens
-        bearer_pat = re.compile(r"\bBearer\s+([A-Za-z0-9\-._~+/]+=*)")
+        bearer_pat = re.compile(r"(?<![A-Za-z0-9])Bearer\s+([A-Za-z0-9\-._~+/]+=*)")
         for m in bearer_pat.finditer(text):
             raw_spans.append((m.start(1), m.end(1), "SECRET", "SECRET", 1.0))
 
         # Config API Keys and passwords
         config_pat = re.compile(
-            r"""(?i)\b(api[_-]?key|secret[_-]?key|access[_-]?token|private[_-]?key|client[_-]?secret|password|passwd|pwd)\s*[:=]\s*['"]?([A-Za-z0-9\-_./+=]{8,})['"]?"""
+            r"""(?i)(?<![A-Za-z0-9_-])(api[_-]?key|secret[_-]?key|access[_-]?token|private[_-]?key|client[_-]?secret|password|passwd|pwd)\s*[:=]\s*['"]?([A-Za-z0-9\-_./+=]{8,})['"]?"""
         )
         for m in config_pat.finditer(text):
             raw_spans.append((m.start(2), m.end(2), "SECRET", "SECRET", 1.0))
 
         # 2. Credit Cards
-        cc_pat = re.compile(r"\b(?:\d{4}[- ]){3}\d{4}\b|\b\d{16}\b")
+        cc_pat = re.compile(r"(?<!\d)(?:(?:\d{4}[- ]){3}\d{4}|\d{16})(?!\d)")
         for m in cc_pat.finditer(text):
             clean_digits = m.group(0).replace("-", "").replace(" ", "")
             if _is_valid_luhn(clean_digits):
                 raw_spans.append((m.start(), m.end(), "CREDIT_CARD", "FINANCIAL", 1.0))
 
         # 3. Emails
-        email_pat = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")
+        email_pat = re.compile(
+            r"(?<![A-Za-z0-9._%+-])[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}(?![A-Za-z0-9.-])"
+        )
         for m in email_pat.finditer(text):
             raw_spans.append((m.start(), m.end(), "EMAIL", "CONTACT", 1.0))
 
@@ -193,7 +197,7 @@ class RuleBasedDetector:
             raw_spans.append((m.start(1), m.end(1), "PHONE", "CONTACT", 0.95))
 
         # 5. ID Numbers (Taiwan ROC ID and Unified Business Number)
-        roc_pat = re.compile(r"\b[A-Z][1289]\d{8}\b")
+        roc_pat = re.compile(r"(?<![A-Za-z0-9])[A-Z][1289]\d{8}(?![A-Za-z0-9])")
         for m in roc_pat.finditer(text):
             val = m.group(0)
             if _is_valid_roc_id(val):
@@ -203,7 +207,7 @@ class RuleBasedDetector:
         for m in ubn_pat.finditer(text):
             raw_spans.append((m.start(1), m.end(1), "ID_NUMBER", "PII", 1.0))
 
-        standalone_ubn_pat = re.compile(r"\b\d{8}\b")
+        standalone_ubn_pat = re.compile(r"(?<!\d)\d{8}(?!\d)")
         for m in standalone_ubn_pat.finditer(text):
             val = m.group(0)
             if _is_valid_ubn(val):
