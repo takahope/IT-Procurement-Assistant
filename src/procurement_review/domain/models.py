@@ -1,3 +1,4 @@
+import json
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
@@ -300,6 +301,24 @@ class ContextBundle(StrictBaseModel):
     complete: bool = True
     unknowns: list[str] = Field(default_factory=list)
 
+    @model_validator(mode="before")
+    @classmethod
+    def remap_aliases(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            if "matched_spans" in data and "source_spans" not in data:
+                data["source_spans"] = data.pop("matched_spans")
+            if "cross_references" in data and "citations" not in data:
+                data["citations"] = data.pop("cross_references")
+        return data
+
+    @property
+    def matched_spans(self) -> list[SourceSpan]:
+        return self.source_spans
+
+    @property
+    def cross_references(self) -> list[str]:
+        return self.citations
+
 
 class CoverageEntry(StrictBaseModel):
     """覆蓋矩陣項目"""
@@ -311,6 +330,46 @@ class CoverageEntry(StrictBaseModel):
     details: str = ""
     scope: str | None = None
 
+    @property
+    def version(self) -> str | None:
+        if self.details:
+            try:
+                data = json.loads(self.details)
+                if isinstance(data, dict):
+                    return data.get("version")
+            except (json.JSONDecodeError, TypeError, ValueError):
+                return None
+        return None
+
+    @property
+    def result(self) -> str | None:
+        if self.details:
+            try:
+                data = json.loads(self.details)
+                if isinstance(data, dict):
+                    return data.get("result")
+            except (json.JSONDecodeError, TypeError, ValueError):
+                return None
+        return None
+
+    @property
+    def processing(self) -> str | None:
+        if self.details:
+            try:
+                data = json.loads(self.details)
+                if isinstance(data, dict):
+                    return data.get("processing")
+            except (json.JSONDecodeError, TypeError, ValueError):
+                return None
+        return None
+
+    def __getitem__(self, item: str) -> Any:
+        if item in ("version", "result", "processing"):
+            return getattr(self, item)
+        if hasattr(self, item):
+            return getattr(self, item)
+        raise KeyError(item)
+
 
 class CoverageMatrix(StrictBaseModel):
     """全份覆蓋矩陣：同時列舉條款與適用要求"""
@@ -320,6 +379,22 @@ class CoverageMatrix(StrictBaseModel):
     requirement_entries: list[CoverageEntry] = Field(default_factory=list)
     unprocessed_clause_ids: list[str] = Field(default_factory=list)
     unresolved_requirement_ids: list[str] = Field(default_factory=list)
+
+    @property
+    def requirements(self) -> dict[str, CoverageEntry]:
+        return {e.item_id: e for e in self.requirement_entries}
+
+    @property
+    def clauses(self) -> dict[str, CoverageEntry]:
+        return {e.item_id: e for e in self.clause_entries}
+
+    @property
+    def unprocessed_ids(self) -> list[str]:
+        return self.unprocessed_clause_ids
+
+    @property
+    def unresolved_ids(self) -> list[str]:
+        return self.unresolved_requirement_ids
 
 
 class DetectedSpan(StrictBaseModel):

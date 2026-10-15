@@ -10,6 +10,7 @@ from procurement_review.domain.models import (
 )
 from procurement_review.domain.models import (
     StrictBaseModel,
+    VersionRef,
 )
 
 SourceSpan = DomainSourceSpan
@@ -61,4 +62,4 @@ class DocumentSnapshot(DomainDocumentSnapshot):
     blocks: list[DocumentBlock] = Field(default_factory=list)  # type: ignore[assignment]
     clauses: list[Clause] = Field(default_factory=list)  # type: ignore[assignment]
     issues: list[QualityIssue] = Field(default_factory=list)  # type: ignore[assignment]
-    confirmation_ref: str | None = None  # type: ignore[assignment]
+    confirmation_ref: VersionRef | str | None = None  # type: ignore[assignment]
