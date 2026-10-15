@@ -67,6 +67,38 @@ _DOMAIN_SECURITY_TERMS = [
 ]
 
 
+_EXTERNAL_LAW_KEYWORDS = [
+    "採購法",
+    "管理法",
+    "個資法",
+    "保護法",
+    "細則",
+    "要點",
+    "作業要點",
+    "實施要點",
+    "辦法",
+    "條例",
+    "準則",
+    "規定",
+    "標準",
+    "法規",
+    "法律",
+    "公約",
+    "GDPR",
+    "Act",
+    "Law",
+]
+
+
+def _is_external_law_reference(text: str, start_offset: int) -> bool:
+    """檢查條款引用前綴是否屬於外部法律、法規、辦法或準則，而非內部合約條款。"""
+    prefix = text[max(0, start_offset - 15) : start_offset]
+    if any(kw in prefix for kw in _EXTERNAL_LAW_KEYWORDS):
+        return True
+    stripped = prefix.rstrip()
+    return bool(stripped.endswith(("法", "細則", "要點", "辦法", "條例", "準則", "標準", "規定", "規", "則", "點")))
+
+
 def _normalize_string(s: str) -> str:
     return re.sub(r"\s+", "", s).lower()
 
@@ -226,8 +258,13 @@ def build_context(
         visiting_keys.add(c_key)
         call_stack.append((c_key, c_label))
 
-        # 掃描條款內文中的條款引用與附件引用
-        clause_refs = _CLAUSE_REF_RE.findall(clause.text)
+        # 掃描條款內文中的條款引用與附件引用（排除外部法律法規引用）
+        clause_refs: list[str] = []
+        for m in _CLAUSE_REF_RE.finditer(clause.text):
+            if _is_external_law_reference(clause.text, m.start()):
+                continue
+            clause_refs.append(m.group(0))
+
         appendix_refs = _APPENDIX_REF_RE.findall(clause.text)
 
         # 條款引用

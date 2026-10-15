@@ -32,23 +32,6 @@ def _hash_rule_refs(rule_refs: list[VersionRef]) -> str:
     return hasher.hexdigest()
 
 
-_run_invalidation_reasons: dict[str, str] = {}
-
-
-def _get_invalidation_reason(self: ReviewRun) -> str | None:
-    return _run_invalidation_reasons.get(str(self.run_id))
-
-
-def _set_invalidation_reason(self: ReviewRun, val: str | None) -> None:
-    if val is not None:
-        _run_invalidation_reasons[str(self.run_id)] = val
-    elif str(self.run_id) in _run_invalidation_reasons:
-        del _run_invalidation_reasons[str(self.run_id)]
-
-
-if not hasattr(ReviewRun, "invalidation_reason"):
-    ReviewRun.invalidation_reason = property(_get_invalidation_reason, _set_invalidation_reason)
-
 
 class Repository:
     """採購審查資料儲存庫。
@@ -377,8 +360,13 @@ class Repository:
         raw_data = self.artifacts.get(case_id=case_id, artifact_id=artifact_ref)
         run = ReviewRun.model_validate_json(raw_data)
         # 疊加目前資料庫狀態與 stale 標記
-        run = run.model_copy(update={"state": db_state, "stale": db_stale})
-        run.invalidation_reason = invalidation_reason
+        run = run.model_copy(
+            update={
+                "state": db_state,
+                "stale": db_stale,
+                "invalidation_reason": invalidation_reason,
+            }
+        )
         return run
 
     def save_run(self, run: ReviewRun) -> ReviewRun:
@@ -414,12 +402,15 @@ class Repository:
             cursor.execute(
                 """
                 UPDATE runs
-                SET state = ?, stale = CASE WHEN stale = 1 THEN 1 ELSE ? END, artifact_ref = ?, updated_at = ?
+                SET state = ?, stale = CASE WHEN stale = 1 THEN 1 ELSE ? END,
+                    invalidation_reason = COALESCE(?, invalidation_reason),
+                    artifact_ref = ?, updated_at = ?
                 WHERE run_id = ?
                 """,
                 (
                     run.state.value,
                     1 if run.stale else 0,
+                    run.invalidation_reason,
                     artifact_id,
                     now_iso,
                     run.run_id,
@@ -866,14 +857,22 @@ class Repository:
         with self._conn() as conn:
             cursor = conn.cursor()
             cursor.execute(
-                "SELECT artifact_ref FROM runs WHERE case_id = ? ORDER BY created_at DESC",
+                "SELECT state, stale, invalidation_reason, artifact_ref FROM runs WHERE case_id = ? ORDER BY created_at DESC",
                 (case_id,),
             )
             rows = cursor.fetchall()
         results: list[ReviewRun] = []
         for row in rows:
             data = self.artifacts.get(case_id=case_id, artifact_id=row["artifact_ref"])
-            results.append(ReviewRun.model_validate_json(data))
+            run = ReviewRun.model_validate_json(data)
+            run = run.model_copy(
+                update={
+                    "state": RunState(row["state"]),
+                    "stale": bool(row["stale"]),
+                    "invalidation_reason": row["invalidation_reason"],
+                }
+            )
+            results.append(run)
         return results
 
     def get_findings_for_run(self, run_id: str) -> list[Finding]:

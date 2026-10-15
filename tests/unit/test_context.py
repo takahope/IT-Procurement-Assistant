@@ -324,3 +324,31 @@ def test_build_context_missing_referenced_appendix_incomplete():
     assert bundle.complete is False
     assert any("附件三" in u for u in bundle.unknowns)
     assert bundle.document_retrieval_status.get("附件三") == "missing"
+
+
+def test_build_context_exclude_external_law_references():
+    """驗證提及外部法律（如政府採購法第101條、資通安全管理法第7條）不被誤判為缺漏之內部合約條款。"""
+    clause = Clause(
+        clause_id="c-ext-law",
+        clause_number="第十條",
+        title="法令遵循與稽核",
+        text="第十條 法令遵循：本合約依政府採購法第101條辦理，並應符合資通安全管理法第7條與個人資料保護法第19條之規定，廠商應負保密義務。",
+        block_ids=["b-ext"],
+        spans=[],
+    )
+    doc = make_test_snapshot(clauses=[clause])
+    req = make_test_requirement(obligation="廠商應負保密義務並配合法令遵循稽核")
+
+    bundle = build_context(req, [doc], max_chars=12000)
+
+    # 外部法規不應被加入 missing 的 retrieval status
+    assert "第101條" not in bundle.document_retrieval_status
+    assert "第7條" not in bundle.document_retrieval_status
+    assert "第19條" not in bundle.document_retrieval_status
+
+    # 亦不應在 citations 或 unknowns 中出現
+    assert not any("第101條" in u for u in bundle.unknowns)
+    assert not any("第7條" in u for u in bundle.unknowns)
+    assert not any("第19條" in u for u in bundle.unknowns)
+    assert bundle.complete is True
+

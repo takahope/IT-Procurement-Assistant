@@ -22,6 +22,8 @@ from procurement_review.domain.errors import DomainError
 from procurement_review.domain.models import (
     CaseFacts,
     GateReport,
+    MaskingSession,
+    OutboundDraft,
     PreparedRequest,
     PurgePlan,
     Review,
@@ -31,6 +33,9 @@ from procurement_review.domain.models import (
 )
 from procurement_review.egress.approvals import approve, get_approval
 from procurement_review.egress.payload import _init_egress_tables
+from procurement_review.masking.detector import RuleBasedDetector
+from procurement_review.masking.restoration import RestorationService, restore
+from procurement_review.masking.session import _VAULT_STORE, mask
 from procurement_review.runtime.lifecycle import (
     AAD_PAYLOAD,
     _derive_recovery_key,
@@ -170,6 +175,28 @@ def test_create_and_restore_backup_full_fidelity_and_zero_network(
         repo=repo,
     )
 
+    # 建立遮罩會話並將對照表持久化儲存於 artifacts
+    detector = RuleBasedDetector()
+    masking_session = MaskingSession(
+        session_id=str(uuid.uuid4()),
+        case_id=review.id,
+        detector_version=detector.version,
+        mapping_vault_ref="vault://masking",
+        outbound_hash="",
+        artifacts=repo.artifacts,
+    )
+    raw_contract_text = "本案聯絡人為王小明主任，代表台灣微軟股份有限公司簽署契約。"
+    draft = OutboundDraft(
+        draft_id=str(uuid.uuid4()),
+        run_id=run.run_id,
+        plaintext_body=raw_contract_text,
+        sensitive_token_count=0,
+        assembled_at=datetime.now(UTC),
+    )
+    masked_draft, masking_session = mask(draft, masking_session, detector, artifacts=repo.artifacts)
+    assert masking_session.roundtrip_ok is True
+    assert "[ORGANIZATION_" in masked_draft.plaintext_body or "[PERSON_" in masked_draft.plaintext_body
+
     backup_dir = tmp_path / "backups"
     backup_file = backup_dir / "backup.bundle"
     recovery_key = "secure-recovery-key-xyz-789"
@@ -234,6 +261,21 @@ def test_create_and_restore_backup_full_fidelity_and_zero_network(
     assert restored_approval.request_sha256 == egress_approval.request_sha256
     assert restored_approval.approved_by == "reviewer-security"
     assert restored_approval.max_resend_count == 1
+
+    # 斷言 5: 驗證持久化於 ArtifactStore 的遮罩對照表在記憶體清空後依然完整保真還原
+    _VAULT_STORE.clear()
+    assert masking_session.session_id not in _VAULT_STORE
+
+    rest_service = RestorationService(artifacts=restored_artifacts)
+    rest_res = rest_service.restore(masked_draft.plaintext_body, masking_session)
+    assert rest_res.adoptable is True
+    assert rest_res.text == raw_contract_text
+
+    # 亦驗證直接呼叫 restore 並傳入 artifacts
+    direct_res = restore(masked_draft.plaintext_body, masking_session, artifacts=restored_artifacts)
+    assert direct_res.adoptable is True
+    assert direct_res.text == raw_contract_text
+
 
 
 def test_wrong_recovery_key_rejected(tmp_path: Path, repo: Repository):

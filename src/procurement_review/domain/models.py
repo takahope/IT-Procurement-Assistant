@@ -276,6 +276,7 @@ class ReviewRun(StrictBaseModel):
     attempts: int = 0
     egress_approval_ref: VersionRef | None = None
     error_message: str | None = None
+    invalidation_reason: str | None = None
 
     @property
     def id(self) -> str:
@@ -424,6 +425,8 @@ class MaskingSession(StrictBaseModel):
     roundtrip_ok: bool = False
     blocking_reasons: list[str] = Field(default_factory=list)
     retention_expire_at: datetime | None = None
+    artifacts: Any = Field(default=None, exclude=True)
+    storage_path: Path | None = Field(default=None, exclude=True)
 
 
 class RestorationResult(StrictBaseModel):

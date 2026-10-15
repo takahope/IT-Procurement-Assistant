@@ -220,9 +220,11 @@ def test_complete_review_journey(e2e_env):
         t_data = t_resp.json()
         if t_data.get("status") == "completed":
             break
+        if t_data.get("status") == "failed":
+            pytest.fail(f"Task failed: {t_data}")
         time.sleep(0.05)
     else:
-        pytest.fail("Background review task did not complete in time")
+        pytest.fail(f"Background review task did not complete in time, last status: {t_data}")
 
     # 檢視審查狀態與 findings
     resp_findings = client.get(f"/api/cases/{case_id}/review/findings")
@@ -550,4 +552,44 @@ def test_document_snapshot_restored_from_vault_after_restart(e2e_env):
     doc_json = resp_doc_api.json()
     assert len(doc_json["blocks"]) > 0
     assert doc_json["content_sha256"] is not None
+
+
+def test_start_review_fails_when_no_active_rules(e2e_env):
+    """驗證在無任何核准發布資安規則時啟動審查，會被阻擋並回傳明確 400 錯誤與引導資訊。"""
+    client: TestClient = e2e_env["client"]
+    token: str = e2e_env["bootstrap_token"]
+
+    # 1. Local session bootstrap
+    resp = client.post("/api/auth/bootstrap", json={"token": token})
+    assert resp.status_code == 200
+    csrf_token = resp.json()["csrf_token"]
+    headers = {"X-CSRF-Token": csrf_token}
+
+    # 2. 建立新案件
+    case_resp = client.post(
+        "/api/cases",
+        headers=headers,
+        json={
+            "title": "無規則審查阻擋測試案",
+            "contract_type": "services",
+            "facts": {
+                "procurement_unit": "政風室",
+                "review_baseline_date": "2026-10-15",
+                "procurement_families": ["services"],
+            },
+        },
+    )
+    assert case_resp.status_code == 200
+    case_id = case_resp.json()["case_id"]
+
+    # 3. 在尚未發布任何 active 規則的狀態下啟動審查
+    resp_run = client.post(
+        f"/api/cases/{case_id}/review/start",
+        headers=headers,
+        json={},
+    )
+    assert resp_run.status_code == 400
+    err_data = resp_run.json()
+    assert err_data["error"] == "NO_ACTIVE_RULES"
+    assert "尚未有核准發布的資安規則" in err_data["detail"]
 

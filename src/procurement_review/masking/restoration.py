@@ -1,10 +1,15 @@
 import re
+from typing import Any
 
 from procurement_review.domain.models import MaskingSession, RestorationResult
 from procurement_review.masking.session import get_session_mapping
 
 
-def restore(text: str, session: MaskingSession) -> RestorationResult:
+def restore(
+    text: str,
+    session: MaskingSession,
+    artifacts: Any = None,
+) -> RestorationResult:
     """本機安全還原已遮罩文字。
 
     保證：
@@ -13,7 +18,9 @@ def restore(text: str, session: MaskingSession) -> RestorationResult:
     - 模型幻覺或未知 token 標註於 unknown_tokens 並拒絕採用 (adoptable=False)
     - 原文既有之假 token（如 <PERSON_1>）安全保留，絕不替換為實體名稱
     """
-    mapping = get_session_mapping(session.session_id)
+    art = artifacts or getattr(session, "artifacts", None)
+    case_id = str(session.case_id) if hasattr(session, "case_id") else None
+    mapping = get_session_mapping(session.session_id, case_id=case_id, artifacts=art)
     token_to_original: dict[str, str] = mapping.token_to_original if mapping else {}
     literal_escapes: set[str] = mapping.literal_escapes if mapping else set()
 
@@ -59,3 +66,14 @@ def restore(text: str, session: MaskingSession) -> RestorationResult:
         wrong_case_tokens=wrong_case_tokens,
         adoptable=adoptable,
     )
+
+
+class RestorationService:
+    """本機安全還原服務，支援持久化 ArtifactStore 解密查詢。"""
+
+    def __init__(self, artifacts: Any = None) -> None:
+        self.artifacts = artifacts
+
+    def restore(self, text: str, session: MaskingSession) -> RestorationResult:
+        return restore(text, session, artifacts=self.artifacts)
+

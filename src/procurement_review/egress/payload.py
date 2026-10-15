@@ -140,7 +140,14 @@ def prepare_egress(
             "Encoded body is not valid UTF-8",
         ) from e
 
-    residuals = detector.detect(decoded_text)
+    # 遮罩 token 本身（如 [ORGANIZATION_xxx_0]）不應觸發未遮罩殘留偵測
+    from procurement_review.masking.session import LITERAL_TOKEN_PATTERNS
+
+    text_to_scan = decoded_text
+    for pat in LITERAL_TOKEN_PATTERNS:
+        text_to_scan = pat.sub(lambda m: "X" * len(m.group(0)), text_to_scan)
+
+    residuals = detector.detect(text_to_scan)
     if residuals:
         types = [s.span_type for s in residuals]
         raise DomainError(

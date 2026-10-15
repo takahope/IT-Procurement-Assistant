@@ -36,6 +36,8 @@ packages = ["src/procurement_review"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+markers = ["live: tests communicating with live cloud provider"]
+
 
 [tool.ruff]
 line-length = 100

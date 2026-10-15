@@ -32,6 +32,7 @@ class RiskLevel(str, Enum):
     MEDIUM = "medium"
     LOW = "low"
     INFO = "info"
+    UNDETERMINED = "undetermined"
 
     @property
     def label_zh(self) -> str:
@@ -41,6 +42,7 @@ class RiskLevel(str, Enum):
             "medium": "中",
             "low": "低",
             "info": "資訊",
+            "undetermined": "未判定",
         }
         return labels[self.value]
 

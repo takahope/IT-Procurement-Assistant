@@ -186,12 +186,14 @@ class RuleBasedDetector:
             raw_spans.append((m.start(), m.end(), "EMAIL", "CONTACT", 1.0))
 
         # 4. Phones (Taiwan mobile and landline)
-        mobile_pat = re.compile(r"(?<!\d)(09\d{2}[- ]?\d{3}[- ]?\d{3}|09\d{8})(?!\d)")
+        mobile_pat = re.compile(
+            r"(?<![A-Za-z0-9_])(09\d{2}[- ]?\d{3}[- ]?\d{3}|09\d{8})(?![A-Za-z0-9_])"
+        )
         for m in mobile_pat.finditer(text):
             raw_spans.append((m.start(1), m.end(1), "PHONE", "CONTACT", 0.95))
 
         landline_pat = re.compile(
-            r"(?<!\d)(\(0[2-8]\)\s*\d{4}[- ]?\d{4}|0[2-8][- ]?\d{4}[- ]?\d{4}|0[2-8]\d{8})(?!\d)"
+            r"(?<![A-Za-z0-9_])(\(0[2-8]\)\s*\d{4}[- ]?\d{4}|0[2-8][- ]?\d{4}[- ]?\d{4}|0[2-8]\d{8})(?![A-Za-z0-9_])"
         )
         for m in landline_pat.finditer(text):
             raw_spans.append((m.start(1), m.end(1), "PHONE", "CONTACT", 0.95))
@@ -207,7 +209,7 @@ class RuleBasedDetector:
         for m in ubn_pat.finditer(text):
             raw_spans.append((m.start(1), m.end(1), "ID_NUMBER", "PII", 1.0))
 
-        standalone_ubn_pat = re.compile(r"(?<!\d)\d{8}(?!\d)")
+        standalone_ubn_pat = re.compile(r"(?<![A-Za-z0-9_])\d{8}(?![A-Za-z0-9_])")
         for m in standalone_ubn_pat.finditer(text):
             val = m.group(0)
             if _is_valid_ubn(val):

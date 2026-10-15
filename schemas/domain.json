@@ -551,7 +551,8 @@
             "high",
             "medium",
             "low",
-            "info"
+            "info",
+            "undetermined"
           ],
           "title": "RiskLevel",
           "type": "string"
@@ -791,7 +792,8 @@
             "high",
             "medium",
             "low",
-            "info"
+            "info",
+            "undetermined"
           ],
           "title": "RiskLevel",
           "type": "string"
@@ -1719,6 +1721,18 @@
           ],
           "default": null,
           "title": "Error Message"
+        },
+        "invalidation_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Invalidation Reason"
         }
       },
       "required": [
@@ -2192,6 +2206,23 @@
           ],
           "default": null,
           "title": "Retention Expire At"
+        },
+        "artifacts": {
+          "default": null,
+          "title": "Artifacts"
+        },
+        "storage_path": {
+          "anyOf": [
+            {
+              "format": "path",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Storage Path"
         }
       },
       "required": [
@@ -2507,7 +2538,8 @@
             "high",
             "medium",
             "low",
-            "info"
+            "info",
+            "undetermined"
           ],
           "title": "RiskLevel",
           "type": "string"
@@ -3428,7 +3460,8 @@
             "high",
             "medium",
             "low",
-            "info"
+            "info",
+            "undetermined"
           ],
           "title": "RiskLevel",
           "type": "string"

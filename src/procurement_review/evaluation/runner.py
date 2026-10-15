@@ -6,6 +6,7 @@ from typing import Any
 from procurement_review.domain.models import Finding
 from procurement_review.evaluation.metrics import (
     GateReport,
+    _safe_div,
     check_release,
     evaluate,
 )
@@ -153,7 +154,14 @@ def run_evaluation(
             "categories": mask_categories,
         },
         "roundtrip": {
-            "fidelity_rate": 1.0 if rt_mismatches == 0 else max(0.0, 1.0 - (rt_mismatches / 100.0)),
+            "fidelity_rate": (
+                max(
+                    0.0,
+                    _safe_div(float((total_mask_entities or total_mask_masked) - rt_mismatches), float(total_mask_entities or total_mask_masked))
+                    if (total_mask_entities or total_mask_masked) > 0
+                    else (1.0 if rt_mismatches == 0 else max(0.0, 1.0 - (rt_mismatches / max(10, rt_mismatches))))
+                )
+            ),
             "mismatches": rt_mismatches,
             "cross_case_swaps": rt_cross_case_swaps,
         },

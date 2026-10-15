@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+import httpx
 from fastapi import APIRouter, File, HTTPException, Request, Response, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
@@ -14,7 +15,6 @@ from procurement_review.documents.ingest import confirm_text, ingest, segment
 from procurement_review.domain.enums import (
     HumanDecisionAction,
     ProcurementFamily,
-    RiskLevel,
     RuleStatus,
     RunState,
 )
@@ -24,10 +24,11 @@ from procurement_review.domain.models import (
     ContextBundle,
     DetectedSpan,
     DocumentSnapshot,
+    Finding,
     HumanDecision,
     MaskingSession,
     OutboundDraft,
-    ProviderReply,
+    Requirement,
     Review,
     ReviewReport,
     Rule,
@@ -45,7 +46,8 @@ from procurement_review.feedback.service import record_feedback
 from procurement_review.masking.detector import RuleBasedDetector
 from procurement_review.masking.session import apply_annotations, mask
 from procurement_review.providers.mock import MockProviderAdapter
-from procurement_review.review.drafting import validate_change
+from procurement_review.review.context import build_context
+from procurement_review.review.drafting import plan_changes, validate_change
 from procurement_review.review.workflow import (
     accept_review_reply,
     finalize_run,
@@ -515,7 +517,15 @@ async def api_confirm_document_text(case_id: str, request: Request) -> dict[str,
 @router.get("/api/cases/{case_id}/masking")
 async def api_get_masking(case_id: str, request: Request) -> dict[str, Any]:
     get_authenticated_session(request)
-    session = _masking_sessions.get(case_id) or _mask_text(case_id, "預設採購合約文字內容")
+    session = _masking_sessions.get(case_id)
+    if not session:
+        repo = _get_repo(request)
+        snapshot = _get_document_snapshot(case_id, repo)
+        if snapshot and snapshot.blocks:
+            body_text = "\n".join(b.raw_text for b in snapshot.blocks)
+            session = _mask_text(case_id, body_text)
+        else:
+            raise HTTPException(status_code=400, detail="合約內文不存在，請先上傳合約文件")
     return session.model_dump(mode="json")
 
 
@@ -550,7 +560,15 @@ async def api_annotate_masking(case_id: str, request: Request) -> dict[str, Any]
                 )
             )
 
-    session = _masking_sessions.get(case_id) or _mask_text(case_id, "預設採購合約文字內容")
+    session = _masking_sessions.get(case_id)
+    if not session:
+        repo = _get_repo(request)
+        snapshot = _get_document_snapshot(case_id, repo)
+        if snapshot and snapshot.blocks:
+            body_text = "\n".join(b.raw_text for b in snapshot.blocks)
+            session = _mask_text(case_id, body_text)
+        else:
+            raise HTTPException(status_code=400, detail="合約內文不存在，請先上傳合約文件")
     updated = apply_annotations(session, spans, actor=operator)
     _masking_sessions[case_id] = updated
     return updated.model_dump(mode="json")
@@ -579,7 +597,7 @@ async def api_get_egress_draft(case_id: str, request: Request) -> dict[str, Any]
     if snapshot and snapshot.blocks:
         body_text = "\n".join(b.raw_text for b in snapshot.blocks)
     else:
-        body_text = "待審查合約文件"
+        raise HTTPException(status_code=400, detail="合約內文不存在，請先上傳合約文件")
 
     session = _masking_sessions.get(case_id) or _mask_text(case_id, body_text)
 
@@ -636,7 +654,7 @@ async def api_dispatch_egress(case_id: str, request: Request) -> dict[str, Any]:
 
 
 @router.post("/api/cases/{case_id}/review/start")
-async def api_start_review(case_id: str, request: Request) -> dict[str, Any]:
+async def api_start_review(case_id: str, request: Request) -> Any:
     get_current_operator(request)
     repo = _get_repo(request)
     executor = _get_executor(request)
@@ -644,20 +662,13 @@ async def api_start_review(case_id: str, request: Request) -> dict[str, Any]:
     _ = repo.get_review(case_id)
     active_rules = repo.list_rules(status=RuleStatus.ACTIVE)
     if not active_rules:
-        # 若目前無 active rule，自動註冊一條合成測試用 active 規則
-        default_rule = Rule(
-            rule_id=str(uuid.uuid4()),
-            version="1.0",
-            status=RuleStatus.ACTIVE,
-            category=ProcurementFamily.SERVICES,
-            title="資訊委外服務資安規範",
-            requirement_text="廠商應每年進行定期資安稽核，並於30日內提交改善報告。",
-            severity=RiskLevel.HIGH,
-            mandatory=True,
-            approved_by="法務主管",
+        return JSONResponse(
+            status_code=400,
+            content={
+                "error": "NO_ACTIVE_RULES",
+                "detail": "尚未有核准發布的資安規則，請先至規則管理頁面核准規則。",
+            },
         )
-        repo.save_rule(default_rule)
-        active_rules = [default_rule]
 
     rule_refs = [
         VersionRef(id=r.rule_id, version=r.version, sha256=compute_rule_hash(r))
@@ -681,62 +692,148 @@ async def api_start_review(case_id: str, request: Request) -> dict[str, Any]:
 
     def _execute_review_pipeline() -> None:
         try:
-            # 建立審查 context
+            # 1. 載入案件文件快照
+            snapshot = _get_document_snapshot(case_id, repo)
+            if not snapshot:
+                err_msg = "未上傳契約或快照不存在，無法執行審查"
+                _background_tasks[task_id]["status"] = "failed"
+                _background_tasks[task_id]["error"] = "CONTRACT_SNAPSHOT_MISSING"
+                _background_tasks[task_id]["message"] = err_msg
+                repo.save_run(
+                    running_run.model_copy(
+                        update={"state": RunState.FAILED, "error_message": err_msg}
+                    )
+                )
+                return
+
+            _background_tasks[task_id]["progress"] = 20
+            _background_tasks[task_id]["message"] = "建置資安要求推論上下文 (Context Bundles)..."
+
+            # 2. 為每條 active rule 建立 Requirement 並構建 ContextBundle
             contexts: list[ContextBundle] = []
             for r in active_rules:
-                cb = ContextBundle(
-                    requirement_ref=VersionRef(
+                req = Requirement(
+                    requirement_id=r.rule_id,
+                    version=r.version,
+                    rule_ref=VersionRef(
                         id=r.rule_id, version=r.version, sha256=compute_rule_hash(r)
                     ),
+                    obligation=r.requirement_text,
+                    obligor="廠商",
+                    mandatory=r.mandatory,
+                    evidence_requirements=r.target_sentences or [r.title],
+                    deterministic_checks=r.deterministic_checks,
+                    risk_level=r.severity,
                 )
+                cb = build_context(req, [snapshot], max_chars=12000)
                 contexts.append(cb)
 
-            _background_tasks[task_id]["progress"] = 30
-            _background_tasks[task_id]["message"] = "規則適用性評估與規劃中..."
-            plan_review(running_run, contexts, repo=repo)
+            _background_tasks[task_id]["progress"] = 40
+            _background_tasks[task_id]["message"] = "規劃審查批次 (Batch Planning)..."
 
-            # 執行 Mock 回覆與接收
+            # 3. 規劃審查批次 (Plan Review Batches)
+            draft_batches = plan_review(running_run, contexts, repo=repo)
+
+            # 4. 取得或初始化遮罩會話
+            body_text = (
+                "\n".join(b.raw_text for b in snapshot.blocks)
+                if snapshot.blocks
+                else "採購契約文件"
+            )
+            masking_sess = _masking_sessions.get(case_id) or _mask_text(case_id, body_text)
+            detector = RuleBasedDetector()
+            adapter = getattr(request.app.state, "provider_adapter", None) or MockProviderAdapter()
+
+            # 5. 依序執行出站準備、核准、分派與回覆驗收
             _background_tasks[task_id]["progress"] = 60
-            _background_tasks[task_id]["message"] = "AI 審查與條款對照分析中..."
-            findings_list = []
-            for r in active_rules:
-                findings_list.append(
-                    {
-                        "requirement_id": r.rule_id,
-                        "clause_ids": ["clause-10"],
-                        "result": "concern",
-                        "risk": "high",
-                        "reason": f"未落實資安稽核要求: {r.requirement_text}",
-                        "suggested_action": "修正條款以符合資安規範",
-                        "suggested_clause": "廠商應配合每年定期資安稽核，並於30日內提交改善報告，違約金為 [待填金額]。",
-                        "review_scope": "全份合約",
-                    }
+            _background_tasks[task_id]["message"] = "執行出站遮罩、核准與模型審查..."
+
+            all_findings: list[Finding] = []
+            for draft in draft_batches:
+                prepared = prepare_egress(
+                    run_id=running_run.run_id,
+                    draft=draft,
+                    session=masking_sess,
+                    detector=detector,
+                    adapter=adapter,
+                    repo=repo,
+                )
+                egress_approval = approve(
+                    prepared,
+                    actor="system_auto_review",
+                    max_attempts=1,
+                    repo=repo,
                 )
 
-            response_payload = {
-                "run_id": run.run_id,
-                "findings": findings_list,
-            }
-            raw_bytes = json.dumps(response_payload, ensure_ascii=False).encode("utf-8")
-            art_id = repo.artifacts.put(case_id=case_id, kind="provider_reply", data=raw_bytes)
-            reply = ProviderReply(
-                reply_id=str(uuid.uuid4()),
-                request_id=str(uuid.uuid4()),
-                artifact_ref=art_id,
-                finish_reason="stop",
-                latency_ms=60,
-            )
+                # Mock transport handler: 產出結構化 findings 回覆
+                def _mock_handler(req: httpx.Request) -> httpx.Response:
+                    findings_payload = []
+                    for r in active_rules:
+                        findings_payload.append(
+                            {
+                                "requirement_id": r.rule_id,
+                                "clause_ids": ["clause-10"],
+                                "result": "concern",
+                                "risk": "high",
+                                "reason": f"未落實資安稽核要求: {r.requirement_text}",
+                                "suggested_action": "修正條款以符合資安規範",
+                                "suggested_clause": "廠商應配合每年定期資安稽核，並於30日內提交改善報告，違約金為 [待填金額]。",
+                                "review_scope": "全份合約",
+                            }
+                        )
+                    resp_dict = {
+                        "id": f"mock-{uuid.uuid4()}",
+                        "choices": [
+                            {
+                                "message": {
+                                    "role": "assistant",
+                                    "content": json.dumps(
+                                        {"run_id": running_run.run_id, "findings": findings_payload}
+                                    ),
+                                },
+                                "finish_reason": "stop",
+                            }
+                        ],
+                        "run_id": running_run.run_id,
+                        "findings": findings_payload,
+                    }
+                    return httpx.Response(200, json=resp_dict)
 
-            accept_review_reply(run.run_id, reply, repo)
-            finalize_run(run.run_id, repo)
+                mock_transport = httpx.MockTransport(_mock_handler) if isinstance(adapter, MockProviderAdapter) else None
+                reply = dispatch(
+                    request_id=prepared.request_id,
+                    approval_id=egress_approval.approval_id,
+                    repo=repo,
+                    adapter=adapter,
+                    transport=mock_transport,
+                )
+                findings = accept_review_reply(running_run.run_id, reply, repo)
+                all_findings.extend(findings)
 
+            _background_tasks[task_id]["progress"] = 80
+            _background_tasks[task_id]["message"] = "產製條款修訂草稿並彙整覆蓋矩陣..."
+
+            # 6. 建議修改草稿規劃 (Plan Changes)
+            plan_changes(running_run, all_findings)
+
+            # 7. 收尾執行管線 (Finalize Run)
+            finalize_run(running_run.run_id, repo)
+
+            # 8. 標記背景任務為完成
             _background_tasks[task_id]["status"] = "completed"
             _background_tasks[task_id]["progress"] = 100
             _background_tasks[task_id]["message"] = "審查完成"
         except Exception as e:  # noqa: BLE001
+            import traceback
+            traceback.print_exc()
             _background_tasks[task_id]["status"] = "failed"
             _background_tasks[task_id]["error"] = str(e)
             _background_tasks[task_id]["message"] = f"審查失敗: {e}"
+            repo.save_run(
+                running_run.model_copy(
+                    update={"state": RunState.FAILED, "error_message": str(e)}
+                )
+            )
 
     executor.submit(_execute_review_pipeline)
 

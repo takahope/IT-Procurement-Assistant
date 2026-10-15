@@ -130,12 +130,27 @@ class ArtifactStore:
                 f"Path traversal characters detected in {param_name}: {ident!r}",
             )
 
-    def put(self, case_id: str, kind: str, data: bytes) -> str:
-        """寫入加密 artifact，回傳生成的 artifact_id (UUID)。"""
+    def put(
+        self,
+        case_id: str,
+        kind: str,
+        data: bytes,
+        artifact_id: str | None = None,
+        filename: str | None = None,
+    ) -> str:
+        """寫入加密 artifact，回傳生成的 artifact_id。"""
         self._validate_identifier(case_id, "case_id")
         self._validate_identifier(kind, "kind")
 
-        artifact_id = str(uuid.uuid4())
+        if filename:
+            target_id = filename.removesuffix(".enc")
+        elif artifact_id:
+            target_id = artifact_id.removesuffix(".enc")
+        else:
+            target_id = str(uuid.uuid4())
+
+        self._validate_identifier(target_id, "artifact_id")
+
         nonce = os.urandom(12)
         aad = f"{case_id}:{kind}".encode()
 
@@ -155,23 +170,24 @@ class ArtifactStore:
         case_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
         os.chmod(case_dir, 0o700)
 
-        target_file = case_dir / f"{artifact_id}.enc"
-        temp_file = case_dir / f".{artifact_id}.tmp"
+        target_file = case_dir / f"{target_id}.enc"
+        temp_file = case_dir / f".{target_id}.tmp"
 
         temp_file.write_bytes(payload)
         os.chmod(temp_file, 0o600)
         temp_file.replace(target_file)
         os.chmod(target_file, 0o600)
 
-        return artifact_id
+        return target_id
 
     def get(self, case_id: str, artifact_id: str) -> bytes:
         """讀取並解密 artifact，拒絕跨案存取、篡改與路徑穿越。"""
         self._validate_identifier(case_id, "case_id")
         self._validate_identifier(artifact_id, "artifact_id")
 
+        pure_id = artifact_id.removesuffix(".enc")
         case_dir = self.root / case_id
-        target_file = case_dir / f"{artifact_id}.enc"
+        target_file = case_dir / f"{pure_id}.enc"
 
         # 檢驗 symlink 與目標路徑是否跳出 storage root（防止 case_dir 或檔案為跳出根目錄之 symlink）
         try:
@@ -183,7 +199,7 @@ class ArtifactStore:
 
         if not target_file.exists():
             # 檢查是否屬於其他案件（跨案存取防護）
-            escaped_id = glob.escape(artifact_id)
+            escaped_id = glob.escape(pure_id)
             other_matches = list(self.root.glob(f"*/{escaped_id}.enc"))
             if other_matches:
                 raise DomainError(
