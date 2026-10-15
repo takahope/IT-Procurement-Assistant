@@ -25,6 +25,7 @@ import contextlib
 import hashlib
 import io
 import os
+import shutil
 import sqlite3
 import struct
 import zipfile
@@ -290,34 +291,77 @@ def restore_backup(
         expected_hashes: dict[str, str] = manifest_data.get("artifact_hashes", {})
 
         target_dir = Path(target).resolve()
-        target_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
-        os.chmod(target_dir, 0o700)
+        target_dir.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
 
-        # 解壓縮並驗證
-        for name in zf.namelist():
-            if name == "manifest.json":
-                continue
+        # 檢查 manifest 的 db_filename 避免路徑穿越
+        db_target_path = target_dir / db_filename
+        if not db_target_path.resolve().is_relative_to(target_dir.resolve()):
+            raise DomainError("CORRUPT_BACKUP", f"Unsafe path traversal in backup: {db_filename}")
 
-            file_bytes = zf.read(name)
-            expected_hash = expected_hashes.get(name)
-            if expected_hash:
-                actual_hash = hashlib.sha256(file_bytes).hexdigest()
-                if actual_hash != expected_hash:
-                    raise DomainError(
-                        "ARTIFACT_TAMPERED",
-                        f"Integrity check failed for restored file '{name}': hash mismatch",
-                    )
+        # 使用暫存隔離目錄 (staging) 解壓縮並校驗，確保失敗時目標目錄完全不被部分污染
+        staging_dir = target_dir.parent / f".tmp_restore_{target_dir.name}_{os.urandom(8).hex()}"
+        staging_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
 
-            if name.startswith("database/"):
-                out_path = target_dir / db_filename
-                out_path.write_bytes(file_bytes)
-                os.chmod(out_path, 0o600)
-            elif name.startswith("vault/"):
-                rel_vault_path = name[len("vault/") :]
-                out_path = target_dir / "vault" / rel_vault_path
-                out_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-                out_path.write_bytes(file_bytes)
-                os.chmod(out_path, 0o600)
+        try:
+            # 解壓縮並驗證
+            for name in zf.namelist():
+                if name == "manifest.json" or name.endswith("/"):
+                    continue
+
+                if name.startswith("database/"):
+                    out_path = target_dir / db_filename
+                    stage_path = staging_dir / db_filename
+                elif name.startswith("vault/"):
+                    rel_vault_path = name[len("vault/") :]
+                    out_path = target_dir / "vault" / rel_vault_path
+                    stage_path = staging_dir / "vault" / rel_vault_path
+                else:
+                    out_path = target_dir / name
+                    stage_path = staging_dir / name
+
+                # Zip Slip (Path Traversal) 防護：驗證 out_path 是否在 target_dir 之內
+                if not out_path.resolve().is_relative_to(target_dir.resolve()):
+                    raise DomainError("CORRUPT_BACKUP", f"Unsafe path traversal in backup: {name}")
+
+                file_bytes = zf.read(name)
+                expected_hash = expected_hashes.get(name)
+                if expected_hash:
+                    actual_hash = hashlib.sha256(file_bytes).hexdigest()
+                    if actual_hash != expected_hash:
+                        raise DomainError(
+                            "ARTIFACT_TAMPERED",
+                            f"Integrity check failed for restored file '{name}': hash mismatch",
+                        )
+
+                stage_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+                stage_path.write_bytes(file_bytes)
+                os.chmod(stage_path, 0o600)
+
+            # 全部檔案校驗通過後，才原子性/受控移入 target_dir
+            target_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+            os.chmod(target_dir, 0o700)
+
+            for item in staging_dir.iterdir():
+                dest = target_dir / item.name
+                if item.is_file():
+                    item.replace(dest)
+                    os.chmod(dest, 0o600)
+                elif item.is_dir():
+                    dest.mkdir(parents=True, exist_ok=True, mode=0o700)
+                    os.chmod(dest, 0o700)
+                    for root, _, files in os.walk(item):
+                        rel_dir = Path(root).relative_to(item)
+                        sub_dest = dest / rel_dir
+                        sub_dest.mkdir(parents=True, exist_ok=True, mode=0o700)
+                        os.chmod(sub_dest, 0o700)
+                        for f in files:
+                            src_f = Path(root) / f
+                            dest_f = sub_dest / f
+                            src_f.replace(dest_f)
+                            os.chmod(dest_f, 0o600)
+        finally:
+            if staging_dir.exists():
+                shutil.rmtree(staging_dir, ignore_errors=True)
 
     # 5. 匯入 master_key 至目標 SecretStore
     secrets.set_key(key_name, master_key)

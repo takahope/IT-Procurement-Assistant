@@ -52,6 +52,13 @@ def _get_cli_secrets(
     return OSKeychainSecretStore()
 
 
+def _resolve_mode(mode_str: str) -> RuntimeMode:
+    """將命令列模式參數映射至 RuntimeMode 列舉。"""
+    if mode_str in ("production", "real"):
+        return RuntimeMode.REAL
+    return RuntimeMode.SYNTHETIC
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="procurement-review",
@@ -63,7 +70,7 @@ def build_parser() -> argparse.ArgumentParser:
     serve_parser = subparsers.add_parser("serve", help="啟動本機審查 Web 服務")
     serve_parser.add_argument(
         "--mode",
-        choices=["synthetic", "production"],
+        choices=["synthetic", "production", "real"],
         default="synthetic",
         help="執行期模式 (預設: synthetic)",
     )
@@ -108,7 +115,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     backup_parser.add_argument(
         "--mode",
-        choices=["synthetic", "production"],
+        choices=["synthetic", "production", "real"],
         default="synthetic",
         help="執行期模式 (預設: synthetic)",
     )
@@ -137,7 +144,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     restore_parser.add_argument(
         "--mode",
-        choices=["synthetic", "production"],
+        choices=["synthetic", "production", "real"],
         default="synthetic",
         help="執行期模式 (預設: synthetic)",
     )
@@ -181,7 +188,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     purge_parser.add_argument(
         "--mode",
-        choices=["synthetic", "production"],
+        choices=["synthetic", "production", "real"],
         default="synthetic",
         help="執行期模式 (預設: synthetic)",
     )
@@ -205,7 +212,7 @@ def main(argv: list[str] | None = None, secrets: SecretStore | None = None) -> N
         vault_root.mkdir(parents=True, exist_ok=True, mode=0o700)
         db_path = data_dir / "procurement_review.db"
 
-        mode = RuntimeMode.SYNTHETIC if args.mode == "synthetic" else RuntimeMode.PRODUCTION
+        mode = _resolve_mode(args.mode)
         policy = RuntimePolicy(mode=mode, data_root=str(data_dir))
 
         active_secrets = _get_cli_secrets(
@@ -242,7 +249,7 @@ def main(argv: list[str] | None = None, secrets: SecretStore | None = None) -> N
         if not db_path.exists() and (data_dir / "app.db").exists():
             db_path = data_dir / "app.db"
 
-        mode = RuntimeMode.SYNTHETIC if args.mode == "synthetic" else RuntimeMode.PRODUCTION
+        mode = _resolve_mode(args.mode)
         active_secrets = _get_cli_secrets(
             mode=mode,
             data_dir=data_dir,
@@ -261,7 +268,7 @@ def main(argv: list[str] | None = None, secrets: SecretStore | None = None) -> N
         backup_path = Path(args.backup).resolve()
         target_dir = Path(args.target).resolve()
         vault_root = target_dir / "vault"
-        mode = RuntimeMode.SYNTHETIC if args.mode == "synthetic" else RuntimeMode.PRODUCTION
+        mode = _resolve_mode(args.mode)
 
         active_secrets = _get_cli_secrets(
             mode=mode,
@@ -294,7 +301,7 @@ def main(argv: list[str] | None = None, secrets: SecretStore | None = None) -> N
         if not db_path.exists() and (data_dir / "app.db").exists():
             db_path = data_dir / "app.db"
 
-        mode = RuntimeMode.SYNTHETIC if args.mode == "synthetic" else RuntimeMode.PRODUCTION
+        mode = _resolve_mode(args.mode)
         active_secrets = _get_cli_secrets(
             mode=mode,
             data_dir=data_dir,
