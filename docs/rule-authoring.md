@@ -149,3 +149,37 @@ class Requirement(StrictBaseModel):
 4. **人工審查與正式發布（Human Release）**：
    - 由資安查核員逐項核對原檔全文後，將來源狀態更新為 `verified_full_text` 並填寫 `verified_at` 與 `verified_by`。
    - 透過管理介面或受控腳本執行 `release_rules`，規則正式轉為 `active` 並進入生產儲存庫。
+
+---
+
+## 6. 規則版本取代與撤銷作業程序 (Superseding & Revocation SOP)
+
+### 6.1 規則取代程序 (Superseding)
+當主管機關更版特定條文範本（例如由 112 年版升級為 113 年版）：
+1. 在新版規則定義中，於 `supersedes` 欄位填入欲取代之舊規則 UUID：
+   ```json
+   {
+     "rule_id": "new-rule-uuid",
+     "version": "2.0",
+     "supersedes": ["old-rule-uuid"]
+   }
+   ```
+2. 當新規則經人工核准正式生效（`release_rules`）時，系統將自動將清單中之舊版規則狀態推進為 `superseded`。
+3. 後續審查篩選時，`superseded` 狀態規則在適用性評估中自動判定為不適用，改由新版規則進行審查。
+
+### 6.2 規則撤銷程序與歷史 Run 失效連動 (Revocation & Stale Cascading)
+當法令廢止或院內政策撤除某項要求：
+1. 透過管理 API 或受控指令執行規則撤銷：
+   ```bash
+   # 透過 Web API 或管理工具撤銷特定規則版本
+   POST /api/rules/{rule_id}/revoke
+   {"version": "1.0", "reason": "主管機關已於114年度全面廢止該條款"}
+   ```
+2. **自動歷史連動機制 (Automatic Stale Invalidation)**：
+   - 系統核心交易將鎖定資料庫，自動掃描所有曾引用該規則之 `ReviewRun`。
+   - 將所有相關 Run 標記為 `stale = 1`，並寫入 `invalidation_reason = 'RULE_REVOKED'`。
+3. **進行中管線阻斷**：
+   - 處於執行中或待核准狀態之審查管線，立即被阻擋出站傳輸（`RUN_STALE` 異常）。
+4. **歷史審查報告標註**：
+   - 先前已匯出之報告仍完整保留於稽核庫中，但在系統查詢介面上將強制顯示「引用法規已失效，建請承辦人重新發起審查」之醒目警語，確保採購合約之合規性無任何法律漏洞。
+

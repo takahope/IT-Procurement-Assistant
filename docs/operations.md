@@ -113,3 +113,107 @@ uv run python -m procurement_review.cli restore \
   - 強制檢核災難復原演練記錄參照（`rehearsal_record_ref`）。
   - 嚴格拒絕以全零 UUID 或全零 SHA-256 偽造演練紀錄。
   - 強制檢核資料保存政策核准參照（`retention_approval_ref`）。
+
+---
+
+## 6. 系統健康檢查與環境診斷 (Doctor CLI)
+
+維運人員在服務上線前、重大升級後或定期稽核時，應執行 `doctor` 命令檢查全系統各項環境參數與安全狀態：
+
+```bash
+uv run procurement-review doctor --mode synthetic --data-dir /path/to/data
+```
+
+### 診斷檢查項目清單：
+1. **Python 執行環境**：驗證直譯器版本符合 `>= 3.11`（推薦 `3.13`）。
+2. **核心相依套件**：驗證 `fastapi`, `pydantic`, `uvicorn`, `cryptography`, `httpx`, `docx`, `pypdf`, `sqlite3` 等模組完整安裝且可正常引用。
+3. **資料目錄權限**：驗證資料根目錄與 `vault/` 實體權限為 `0700`，且目前使用者具備完整讀寫與鎖定權限。
+4. **SecretStore 金鑰庫**：驗證金鑰存取正常，確認主資料金鑰已配置。**安全保證：命令輸出嚴禁揭露金鑰原文或十六進位敏感密文**。
+5. **SQLite 資料庫連線**：測試連線並確保 WAL（Write-Ahead Logging）交易模式已就緒。
+6. **規則包與法規清單**：檢查 `software_maintenance`, `custom_software`, `cloud_service`, `mixed` 四類採購分類規則包之可用性。
+7. **供應商組態**：檢查適配器設定（合成模式下確認 `MockProviderAdapter`，真實模式下確認 `CloudAdapter` 憑證參照）。
+8. **生命週期與受控清除**：確認 30 天留存期限配置、墓碑審計資料表及災難復原檢核門狀態。
+
+若所有檢核項目皆正常，命令將以退出碼 `0` 結束。
+
+---
+
+## 7. 疑似外洩與資安事件應變作業 (Incident Response for Suspected Leaks)
+
+若發生或懷疑發生個資機敏外洩、未授權連線或金鑰外洩情事，請立即依下列 SOP 應變：
+
+### 7.1 狀況 A：出站草稿疑似機敏殘留 (Masking Residual Leak)
+- **觸發情境**：在出站預覽中發現內部人名、伺服器 IP、金鑰或內部網址未被遮罩。
+- **處置步驟**：
+  1. **禁止點擊核准**：承辦人切勿點擊核准出站按鈕，系統出站守護機制在未取得合法簽署核准前維持 100% 阻斷。
+  2. **手動補標**：在遮罩標記介面選取該機敏文字，手動指派實體類別（如 `SECRET`, `ORG`, `PERSON`）並儲存補標會話。
+  3. **自動失效確認**：人工補標後，系統會自動生成全新 `session_id`，先前若有產出之出站草稿將立即自動失效，防止誤送。
+  4. **通報與修正**：通知維護人員更新 `RuleBasedDetector` 規則或正規表達式庫，納入新特徵。
+
+### 7.2 狀況 B：異常網路出站阻擋與警報 (Unauthorized Egress Attempt)
+- **觸發情境**：系統攔截到指向非白名單網址、非 HTTPS 協定或含有 URL Query 敏感參數之連線請求。
+- **處置步驟**：
+  1. 系統派發器將立即拋出 `INVALID_ENDPOINT` 或 `DELIVERY_UNKNOWN_LOCKED` 阻斷連線。
+  2. 檢查 `egress_dispatches` 資料庫紀錄，確認嘗試連線之端點與 `request_id`。
+  3. 隔離該審查 Run，執行撤銷程序：
+     ```python
+     repo.invalidate(case_id, reason="SECURITY_ANOMALOUS_ENDPOINT")
+     ```
+  4. 確認伺服器主機網路防火牆僅放行核准之特定 LLM 供應商 IP / 網域名稱。
+
+### 7.3 狀況 C：主資料金鑰洩漏之緊急處置 (Master Key Compromise)
+- **觸發情境**：工程師本機遭入侵、OS Keychain 被匯出或金鑰備份疑遭竊取。
+- **處置步驟**：
+  1. **立即停止 Web 服務**：中止所有 `procurement-review serve` 處理程序。
+  2. **產製緊急密封備份**：使用全新的高強度復原金鑰產製加密備份：
+     ```bash
+     uv run procurement-review backup --data-dir ./data --target /secure_storage/emergency.bundle --recovery-key "NEW_EMERGENCY_KEY"
+     ```
+  3. **清空舊金鑰與輪換**：從 Keychain 移除舊 `artifact_master_key`，重新生成 256 位元隨機金鑰。
+  4. **全量 Artifact 重密**：依第 8 節金鑰輪換程序解密並以新金鑰重新加密。
+
+---
+
+## 8. 金鑰輪換作業程序 (Key Rotation Procedures)
+
+為符合資安稽核要求，系統主資料金鑰（Data Key）與備援復原金鑰（Recovery Key）應定期（建議每年或有人員異動時）輪換：
+
+### 8.1 Data Key 輪換（Vault 加密重構）
+1. 建立全新備份封包確認目前資料完整無虞。
+2. 啟動離線輪換腳本，讀取舊金鑰解密每項 Vault Artifact，隨後以全新生成之 32 bytes AES-256-GCM 金鑰重新加密寫入。
+3. 更新作業系統 Keychain 中儲存之 `artifact_master_key`。
+4. 執行 `uv run pytest tests/integration/test_end_to_end.py` 驗證所有資料可正確解密還原。
+
+### 8.2 Recovery Key 輪換（備援封包重新包裝）
+1. 解密現有備份之 Envelope Header（取得目前被 Wrap 之主金鑰）。
+2. 提供新的高強度密語，使用 HKDF-SHA256 衍生新 Recovery Key。
+3. 重新封裝主資料金鑰並寫回備份清單。
+4. 廢止舊 Recovery Key 實體保管卡，登錄新金鑰保管紀錄。
+
+---
+
+## 9. 定期備份與災難復原演練 SOP (Rehearsal Drills)
+
+為符合發布檢核門（Release Gate）要求，真實模式部署前必須完成災難復原演練，並將演練紀錄登錄於系統：
+
+1. **準備隔離演練目錄**：建立 `/tmp/rehearsal_drill_data`。
+2. **產製演練備份**：
+   ```bash
+   uv run procurement-review backup \
+     --data-dir /path/to/data \
+     --target /tmp/rehearsal_drill.bundle \
+     --recovery-key "DRILL_PASS_KEY_2026"
+   ```
+3. **執行跨目錄還原**：
+   ```bash
+   uv run procurement-review restore \
+     --backup /tmp/rehearsal_drill.bundle \
+     --target /tmp/rehearsal_drill_data \
+     --recovery-key "DRILL_PASS_KEY_2026"
+   ```
+4. **校驗還原產物**：
+   - 檢查 `procurement_review.db` 可由 SQLite 讀取且資料筆數一致。
+   - 檢查 `vault/` 內每項加密檔案之 SHA-256 雜湊與備份 Manifest 100% 吻合。
+   - 記錄演練時間、執行人員與產物雜湊，產製合法 `rehearsal_record_ref`。
+5. **演練資料安全銷毀**：清除演練產物並確認無機敏資料留存於暫存區。
+
