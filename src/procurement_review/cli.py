@@ -62,6 +62,9 @@ def _resolve_mode(mode_str: str) -> RuntimeMode:
     return RuntimeMode.SYNTHETIC
 
 
+DEFAULT_DATA_DIR = str(Path.home() / ".procurement_review" / "data")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="procurement-review",
@@ -79,8 +82,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     serve_parser.add_argument(
         "--data-dir",
-        default="./data",
-        help="資料儲存根目錄路徑 (預設: ./data)",
+        default=DEFAULT_DATA_DIR,
+        help=f"資料儲存根目錄路徑 (預設: {DEFAULT_DATA_DIR})",
     )
     serve_parser.add_argument(
         "--host",
@@ -103,8 +106,8 @@ def build_parser() -> argparse.ArgumentParser:
     backup_parser = subparsers.add_parser("backup", help="產製加密備份封包")
     backup_parser.add_argument(
         "--data-dir",
-        default="./data",
-        help="來源資料儲存目錄 (預設: ./data)",
+        default=DEFAULT_DATA_DIR,
+        help=f"來源資料儲存目錄 (預設: {DEFAULT_DATA_DIR})",
     )
     backup_parser.add_argument(
         "--target",
@@ -166,8 +169,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     purge_parser.add_argument(
         "--data-dir",
-        default="./data",
-        help="資料儲存目錄 (預設: ./data)",
+        default=DEFAULT_DATA_DIR,
+        help=f"資料儲存目錄 (預設: {DEFAULT_DATA_DIR})",
     )
     purge_parser.add_argument(
         "--as-of",
@@ -228,8 +231,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     doctor_parser.add_argument(
         "--data-dir",
-        default="./data",
-        help="資料儲存根目錄路徑 (預設: ./data)",
+        default=DEFAULT_DATA_DIR,
+        help=f"資料儲存根目錄路徑 (預設: {DEFAULT_DATA_DIR})",
     )
     doctor_parser.add_argument(
         "--master-key",

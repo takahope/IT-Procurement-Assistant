@@ -116,7 +116,10 @@ def _get_document_snapshot(
 
 
 def _mask_text(
-    case_id: str, text: str, existing_session: MaskingSession | None = None
+    case_id: str,
+    text: str,
+    existing_session: MaskingSession | None = None,
+    artifacts: Any = None,
 ) -> MaskingSession:
     sess = existing_session or _masking_sessions.get(case_id)
     if sess is None:
@@ -139,7 +142,7 @@ def _mask_text(
         assembled_at=datetime.now(UTC),
     )
     detector = RuleBasedDetector()
-    _, updated_sess = mask(draft, sess, detector)
+    _, updated_sess = mask(draft, sess, detector, artifacts=artifacts)
     _masking_sessions[case_id] = updated_sess
     return updated_sess
 
@@ -453,7 +456,7 @@ async def api_upload_document(
 
     # 同步初始化遮罩會話
     full_text = "\n".join(b.raw_text for b in seg_snapshot.blocks)
-    _mask_text(case_id, full_text)
+    _mask_text(case_id, full_text, artifacts=repo.artifacts)
 
     return seg_snapshot.model_dump(mode="json")
 
@@ -504,7 +507,12 @@ async def api_confirm_document_text(case_id: str, request: Request) -> dict[str,
 
     # 重新遮罩
     full_text = "\n".join(b.raw_text for b in confirmed_snapshot.blocks)
-    _mask_text(case_id, full_text, existing_session=_masking_sessions.get(case_id))
+    _mask_text(
+        case_id,
+        full_text,
+        existing_session=_masking_sessions.get(case_id),
+        artifacts=repo.artifacts,
+    )
 
     return confirmed_snapshot.model_dump(mode="json")
 
@@ -523,7 +531,7 @@ async def api_get_masking(case_id: str, request: Request) -> dict[str, Any]:
         snapshot = _get_document_snapshot(case_id, repo)
         if snapshot and snapshot.blocks:
             body_text = "\n".join(b.raw_text for b in snapshot.blocks)
-            session = _mask_text(case_id, body_text)
+            session = _mask_text(case_id, body_text, artifacts=repo.artifacts)
         else:
             raise HTTPException(status_code=400, detail="合約內文不存在，請先上傳合約文件")
     return session.model_dump(mode="json")
@@ -566,7 +574,7 @@ async def api_annotate_masking(case_id: str, request: Request) -> dict[str, Any]
         snapshot = _get_document_snapshot(case_id, repo)
         if snapshot and snapshot.blocks:
             body_text = "\n".join(b.raw_text for b in snapshot.blocks)
-            session = _mask_text(case_id, body_text)
+            session = _mask_text(case_id, body_text, artifacts=repo.artifacts)
         else:
             raise HTTPException(status_code=400, detail="合約內文不存在，請先上傳合約文件")
     updated = apply_annotations(session, spans, actor=operator)
@@ -599,7 +607,9 @@ async def api_get_egress_draft(case_id: str, request: Request) -> dict[str, Any]
     else:
         raise HTTPException(status_code=400, detail="合約內文不存在，請先上傳合約文件")
 
-    session = _masking_sessions.get(case_id) or _mask_text(case_id, body_text)
+    session = _masking_sessions.get(case_id) or _mask_text(
+        case_id, body_text, artifacts=repo.artifacts
+    )
 
     draft = OutboundDraft(
         draft_id=str(uuid.uuid4()),
@@ -694,10 +704,10 @@ async def api_start_review(case_id: str, request: Request) -> Any:
         try:
             # 1. 載入案件文件快照
             snapshot = _get_document_snapshot(case_id, repo)
-            if not snapshot:
-                err_msg = "未上傳契約或快照不存在，無法執行審查"
+            if not snapshot or not snapshot.blocks:
+                err_msg = "未上傳契約或快照內容為空，無法執行審查"
                 _background_tasks[task_id]["status"] = "failed"
-                _background_tasks[task_id]["error"] = "CONTRACT_SNAPSHOT_MISSING"
+                _background_tasks[task_id]["error"] = "CONTRACT_SNAPSHOT_EMPTY"
                 _background_tasks[task_id]["message"] = err_msg
                 repo.save_run(
                     running_run.model_copy(
@@ -735,12 +745,10 @@ async def api_start_review(case_id: str, request: Request) -> Any:
             draft_batches = plan_review(running_run, contexts, repo=repo)
 
             # 4. 取得或初始化遮罩會話
-            body_text = (
-                "\n".join(b.raw_text for b in snapshot.blocks)
-                if snapshot.blocks
-                else "採購契約文件"
+            body_text = "\n".join(b.raw_text for b in snapshot.blocks)
+            masking_sess = _masking_sessions.get(case_id) or _mask_text(
+                case_id, body_text, artifacts=repo.artifacts
             )
-            masking_sess = _masking_sessions.get(case_id) or _mask_text(case_id, body_text)
             detector = RuleBasedDetector()
             adapter = getattr(request.app.state, "provider_adapter", None) or MockProviderAdapter()
 
