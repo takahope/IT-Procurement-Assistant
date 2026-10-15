@@ -33,7 +33,10 @@ from procurement_review.domain.models import (
     VersionRef,
 )
 from procurement_review.review.coverage import build_coverage
-from procurement_review.review.validation import validate_provider_response_json
+from procurement_review.review.validation import (
+    validate_findings,
+    validate_provider_response_json,
+)
 from procurement_review.storage.repository import Repository
 
 
@@ -216,27 +219,118 @@ def get_batch_status(run_id: str, repo: Repository) -> list[dict[str, Any]]:
         ]
 
 
+def _find_target_batch(
+    run_id: str,
+    repo: Repository,
+    batch_id: str | None = None,
+    reply: ProviderReply | None = None,
+    reply_req_ids: set[str] | None = None,
+) -> str | None:
+    """找出指定或比對匹配之 batch_id。"""
+    with repo._conn() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT batch_id, draft_id, status, requirement_ids
+            FROM review_batches
+            WHERE run_id = ?
+            ORDER BY created_at ASC
+            """,
+            (run_id,),
+        )
+        rows = cursor.fetchall()
+
+    if not rows:
+        return None
+
+    # 1. 直接指定 batch_id
+    if batch_id:
+        for r in rows:
+            if r["batch_id"] == batch_id:
+                return batch_id
+
+    # 2. 比對 reply.request_id 與 batch_id 或 draft_id
+    if reply and reply.request_id:
+        req_id_str = str(reply.request_id)
+        for r in rows:
+            if r["batch_id"] == req_id_str or r["draft_id"] == req_id_str:
+                return r["batch_id"]
+
+    # 3. 比對 reply 中的 requirement_ids
+    if reply_req_ids:
+        best_match = None
+        for r in rows:
+            try:
+                b_reqs = set(json.loads(r["requirement_ids"]))
+            except (json.JSONDecodeError, TypeError, ValueError):
+                b_reqs = set()
+            if reply_req_ids == b_reqs:
+                return r["batch_id"]
+            if (reply_req_ids.issubset(b_reqs) or (reply_req_ids & b_reqs)) and best_match is None:
+                best_match = r["batch_id"]
+                if r["status"] != "done":
+                    return best_match
+        if best_match:
+            return best_match
+
+    # 4. 若僅有一批或僅有一批未完成
+    non_done = [r["batch_id"] for r in rows if r["status"] != "done"]
+    if len(non_done) == 1:
+        return non_done[0]
+    if len(rows) == 1:
+        return rows[0]["batch_id"]
+
+    return None
+
+
+def _update_batch_status(
+    repo: Repository,
+    batch_id: str,
+    status: str,
+    error_message: str | None = None,
+) -> None:
+    """更新特定批次之狀態，絕不使用全域 WHERE run_id。"""
+    now_iso = datetime.now(UTC).isoformat()
+    with repo._conn() as conn:
+        conn.execute("BEGIN IMMEDIATE;")
+        conn.execute(
+            """
+            UPDATE review_batches
+            SET status = ?, error_message = ?, updated_at = ?
+            WHERE batch_id = ?
+            """,
+            (status, error_message, now_iso, batch_id),
+        )
+        conn.commit()
+
+
 def accept_review_reply(
     run_id: str,
     reply: ProviderReply,
     repo: Repository,
+    batch_id: str | None = None,
 ) -> list[Finding]:
     """受控解析並驗收模型供應商之審查回覆。
 
     保證：
-    - 截斷回應（truncated finish_reason）或格式錯誤不產可採用結果，記錄錯誤。
-    - 若審查上下文缺少必要文件（如EULA），模型回 missing 必自動轉換為 needs_confirmation。
+    - 截斷回應（truncated finish_reason）或格式錯誤不產可採用結果，記錄錯誤並將該批次標記為 failed。
+    - 針對特定批次 ID 更新批次狀態，絕不使用全域 run_id 抹除未處理批次。
     - 實質審查維持人工審核 human_status = 'pending'。
+    - 若審查上下文缺少必要文件（如EULA），模型回 missing 必自動轉換為 needs_confirmation。
     - run 為 stale 時，結果僅落盤舊 run 供歷史留存，不可納入新報告。
     """
     _init_batch_tables(repo)
     run = repo.get_run(run_id)
+
+    target_b_id = _find_target_batch(run_id, repo, batch_id=batch_id, reply=reply)
 
     # 1. 檢驗 finish_reason 是否異常截斷
     if reply.finish_reason != "stop":
         err_msg = (
             f"Provider reply truncated or finished abnormally with finish_reason='{reply.finish_reason}'"
         )
+        if target_b_id:
+            _update_batch_status(repo, target_b_id, status="failed", error_message=err_msg)
         repo.save_run(run.model_copy(update={"error_message": err_msg, "state": RunState.FAILED}))
         return []
 
@@ -245,6 +339,8 @@ def accept_review_reply(
         raw_bytes = repo.artifacts.get(case_id=run.case_id, artifact_id=reply.artifact_ref)
     except (DomainError, KeyError, ValueError, OSError) as e:
         err_msg = f"Cannot read provider reply artifact '{reply.artifact_ref}': {e}"
+        if target_b_id:
+            _update_batch_status(repo, target_b_id, status="failed", error_message=err_msg)
         repo.save_run(run.model_copy(update={"error_message": err_msg, "state": RunState.FAILED}))
         return []
 
@@ -253,13 +349,29 @@ def accept_review_reply(
         payload = json.loads(raw_bytes.decode("utf-8"))
     except (json.JSONDecodeError, UnicodeDecodeError) as e:
         err_msg = f"Provider reply is not valid JSON: {e}"
+        if target_b_id:
+            _update_batch_status(repo, target_b_id, status="failed", error_message=err_msg)
         repo.save_run(run.model_copy(update={"error_message": err_msg, "state": RunState.FAILED}))
         return []
+
+    # 提取 payload 中的 requirement_ids 以便更精確定位 batch
+    findings_raw = payload.get("findings", []) if isinstance(payload, dict) else []
+    reply_req_ids = {
+        str(item.get("requirement_id"))
+        for item in findings_raw
+        if isinstance(item, dict) and "requirement_id" in item
+    }
+    if not target_b_id and reply_req_ids:
+        target_b_id = _find_target_batch(
+            run_id, repo, batch_id=batch_id, reply=reply, reply_req_ids=reply_req_ids
+        )
 
     # 4. JSON Schema 格式驗證
     is_valid, schema_errors = validate_provider_response_json(payload)
     if not is_valid:
         err_msg = f"Provider reply failed schema validation: {'; '.join(schema_errors)}"
+        if target_b_id:
+            _update_batch_status(repo, target_b_id, status="failed", error_message=err_msg)
         repo.save_run(run.model_copy(update={"error_message": err_msg, "state": RunState.FAILED}))
         return []
 
@@ -341,6 +453,8 @@ def accept_review_reply(
             except (ValueError, TypeError, ValidationError):
                 continue
 
+        citations = list(item.get("citations", []))
+
         finding = Finding(
             finding_id=item.get("finding_id") or str(uuid.uuid4()),
             run_id=run.run_id,
@@ -359,25 +473,49 @@ def accept_review_reply(
             human_status="pending",  # 核心斷言：有效引用仍保持 pending
             conclusion_nature=[SourceNature.APPLICABLE_LAW],
             review_scope=review_scope,
+            citations=citations,
         )
 
         # 儲存至儲存庫
         repo.save_finding(finding)
         findings.append(finding)
 
-    # 7. 更新批次狀態為 done
-    now_iso = datetime.now(UTC).isoformat()
-    with repo._conn() as conn:
-        conn.execute("BEGIN IMMEDIATE;")
-        conn.execute(
-            """
-            UPDATE review_batches
-            SET status = 'done', updated_at = ?
-            WHERE run_id = ?
-            """,
-            (now_iso, run_id),
+    # 驗證 findings 來源引文與結構
+    contexts_list: list[ContextBundle] = []
+    for c_dict in saved_contexts.values():
+        try:
+            contexts_list.append(ContextBundle.model_validate(c_dict))
+        except (ValidationError, ValueError, TypeError):
+            pass
+
+    review = repo.get_review(run.case_id)
+    docs_list: list[DocumentSnapshot] = []
+    if review.document_snapshot_ref:
+        try:
+            doc_data = repo.artifacts.get(
+                case_id=review.case_id, artifact_id=review.document_snapshot_ref.id
+            )
+            docs_list = [DocumentSnapshot.model_validate_json(doc_data)]
+        except (DomainError, KeyError, ValueError, OSError, ValidationError):
+            docs_list = []
+
+    if contexts_list and findings:
+        val_report = validate_findings(findings, contexts_list, docs_list)
+        val_bytes = val_report.model_dump_json().encode("utf-8")
+        repo.artifacts.put(case_id=run.case_id, kind="validation_report", data=val_bytes)
+        for f in findings:
+            f_issues = [i for i in val_report.issues if str(f.finding_id) in i]
+            if any("[source]" in i or "[structure]" in i for i in f_issues):
+                f.validation_status = "failed"
+                repo.save_finding(f)
+
+    # 7. 更新指定批次狀態為 done
+    if not target_b_id and reply_req_ids:
+        target_b_id = _find_target_batch(
+            run_id, repo, batch_id=batch_id, reply=reply, reply_req_ids=reply_req_ids
         )
-        conn.commit()
+    if target_b_id:
+        _update_batch_status(repo, target_b_id, status="done")
 
     return findings
 
@@ -407,7 +545,36 @@ def finalize_run(run_id: str, repo: Repository) -> CoverageMatrix:
     batch_records = get_batch_status(run_id, repo)
     all_batches_done = len(batch_records) > 0 and all(b["status"] == "done" for b in batch_records)
 
-    # 3. 取得合約條款與文件快照
+    # 3. 讀取批次中保存的 Context 快照與所有預期的 requirement_id
+    saved_contexts: dict[str, dict[str, Any]] = {}
+    with repo._conn() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT context_artifact_ref FROM review_batches WHERE run_id = ?",
+            (run_id,),
+        )
+        batch_rows = cursor.fetchall()
+        for b_row in batch_rows:
+            ref = b_row["context_artifact_ref"]
+            if ref:
+                try:
+                    c_bytes = repo.artifacts.get(case_id=run.case_id, artifact_id=ref)
+                    c_list = json.loads(c_bytes.decode("utf-8"))
+                    for c_dict in c_list:
+                        r_id = c_dict.get("requirement_ref", {}).get("id")
+                        if r_id:
+                            saved_contexts[str(r_id)] = c_dict
+                except (DomainError, KeyError, ValueError, OSError):
+                    continue
+
+    all_planned_req_ids: list[str] = []
+    for b in batch_records:
+        for r_id in b["requirement_ids"]:
+            r_id_str = str(r_id)
+            if r_id_str not in all_planned_req_ids:
+                all_planned_req_ids.append(r_id_str)
+
+    # 4. 取得合約條款與文件快照
     documents: list[DocumentSnapshot] = []
     if review.document_snapshot_ref:
         try:
@@ -447,33 +614,58 @@ def finalize_run(run_id: str, repo: Repository) -> CoverageMatrix:
             )
         ]
 
-    # 4. 取得適用要求判定
+    # 5. 取得適用要求判定（全量涵蓋所有計劃之 requirement_ids 與 findings）
     decisions: list[ApplicabilityDecision] = []
     seen_reqs: set[str] = set()
+
+    target_req_ids = list(all_planned_req_ids)
     for f in findings:
-        if f.requirement_id not in seen_reqs:
-            seen_reqs.add(f.requirement_id)
+        if str(f.requirement_id) not in target_req_ids:
+            target_req_ids.append(str(f.requirement_id))
+
+    for r_id in target_req_ids:
+        if r_id not in seen_reqs:
+            seen_reqs.add(r_id)
+            c_data = saved_contexts.get(r_id, {})
+            req_ref_data = c_data.get("requirement_ref", {})
+            version = req_ref_data.get("version", "1.0")
+            sha256 = req_ref_data.get("sha256", "req" * 21 + "a")
             decisions.append(
                 ApplicabilityDecision(
                     requirement_ref=VersionRef(
-                        id=f.requirement_id,
-                        version="1.0",
-                        sha256="req" * 21 + "a",
+                        id=r_id,
+                        version=version,
+                        sha256=sha256,
                     ),
                     state=ApplicabilityState.APPLICABLE,
                     reasons=[],
                 )
             )
 
-    # 5. 建構覆蓋矩陣
+    # 6. 建構覆蓋矩陣
     matrix = build_coverage(documents, decisions, findings, run_id=run.run_id)
 
-    # 6. 儲存覆蓋矩陣 Artifact
+    # 7. 儲存覆蓋矩陣 Artifact
     matrix_bytes = matrix.model_dump_json().encode("utf-8")
     repo.artifacts.put(case_id=run.case_id, kind="coverage_matrix", data=matrix_bytes)
 
-    # 7. 更新 run 狀態
-    if all_batches_done and len(matrix.unprocessed_clause_ids) == 0:
+    # 8. 判定是否滿足 DONE 條件：
+    # - ALL batches are 'done'
+    # - len(matrix.unprocessed_clause_ids) == 0
+    # - All planned requirements have been processed (finding exists for every planned req)
+    findings_req_ids = {str(f.requirement_id) for f in findings}
+    omitted_reqs = [r for r in all_planned_req_ids if r not in findings_req_ids]
+    all_planned_reqs_processed = (len(omitted_reqs) == 0) and (
+        len(all_planned_req_ids) > 0 or len(findings) > 0
+    )
+
+    can_mark_done = (
+        all_batches_done
+        and len(matrix.unprocessed_clause_ids) == 0
+        and all_planned_reqs_processed
+    )
+
+    if can_mark_done:
         repo.save_run(
             run.model_copy(
                 update={
@@ -484,7 +676,7 @@ def finalize_run(run_id: str, repo: Repository) -> CoverageMatrix:
         )
     else:
         # 未全量完成時不標記 DONE
-        if run.state == RunState.PLANNED:
+        if run.state != RunState.RUNNING and run.state != RunState.FAILED:
             repo.save_run(run.model_copy(update={"state": RunState.RUNNING}))
 
     return matrix

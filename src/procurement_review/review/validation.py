@@ -13,7 +13,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from procurement_review.documents.structure import SourceSpan
+from procurement_review.documents.structure import DocumentSnapshot, SourceSpan
 from procurement_review.domain.enums import ResultEnum, RiskLevel
 from procurement_review.domain.models import (
     ContextBundle,
@@ -26,7 +26,7 @@ _SCHEMA_PATH = Path(__file__).resolve().parents[3] / "schemas" / "provider-respo
 
 
 class DetailedValidationReport(ValidationReport):
-    """擴展 ValidationReport，提供 .structure 與 .source 之 GateReport 屬性存取。"""
+    """擴展 ValidationReport，提供 .structure, .source 與 .substance 之 GateReport 屬性存取。"""
 
     @property
     def structure(self) -> GateReport:
@@ -45,6 +45,16 @@ class DetailedValidationReport(ValidationReport):
             ok=self.source_ok,
             operation="source_validation",
             issues=source_issues,
+            checked_at=self.checked_at,
+        )
+
+    @property
+    def substance(self) -> GateReport:
+        substance_issues = [i for i in self.issues if i.startswith("[substance]")]
+        return GateReport(
+            ok=self.substance_ok,
+            operation="substance_validation",
+            issues=substance_issues,
             checked_at=self.checked_at,
         )
 
@@ -199,6 +209,7 @@ def _clause_id_matches(clause_id: str, candidates: set[str]) -> bool:
 def validate_findings(
     findings: list[Finding],
     contexts: list[ContextBundle],
+    documents: list[DocumentSnapshot] | None = None,
 ) -> DetailedValidationReport:
     """執行審查發現三層驗證：
 
@@ -293,22 +304,42 @@ def validate_findings(
                 source_ok = False
                 issues.append(f"[source] Finding {f_id}: Non-existent clause_id '{cid}' in context")
 
-        # 檢驗短引文存在性 (Verbatim quotation fidelity in source spans)
-        # 來源存在不能自動判 supports=True
-        all_span_text = " ".join(
-            span.structural_path for span in ctx.source_spans if span.structural_path
-        )
-        for cit in finding.citations if hasattr(finding, "citations") else []:
+        # 檢驗短引文存在性 (Verbatim quotation fidelity in source text)
+        # 收集真實來源文字（ctx.citations, span.text, block.raw_text, definitions, exceptions）
+        source_texts: list[str] = list(ctx.citations)
+        for span in ctx.source_spans:
+            if getattr(span, "text", None):
+                source_texts.append(span.text)
+        source_texts.extend(ctx.definitions.values())
+        source_texts.extend(ctx.exceptions)
+
+        if documents:
+            span_block_ids = {str(s.block_id) for s in ctx.source_spans if s.block_id}
+            span_doc_ids = {str(s.document_id) for s in ctx.source_spans if s.document_id}
+            for doc in documents:
+                if not span_doc_ids or str(doc.document_id) in span_doc_ids:
+                    for b in getattr(doc, "blocks", []):
+                        b_id = str(getattr(b, "block_id", ""))
+                        b_text = getattr(b, "raw_text", "")
+                        if not span_block_ids or b_id in span_block_ids:
+                            source_texts.append(b_text)
+
+        citations_to_check = getattr(finding, "citations", [])
+        for cit in citations_to_check:
+            if not cit or not cit.strip():
+                continue
             norm_cit = _normalize_text(cit)
-            if norm_cit not in _normalize_text(all_span_text):
+            found_in_source = any(norm_cit in _normalize_text(st) for st in source_texts if st)
+            if not found_in_source:
                 source_ok = False
                 issues.append(
-                    f"[source] Finding {f_id}: Citation mismatch: '{cit}' not found in source spans"
+                    f"[source] Finding {f_id}: Citation mismatch: '{cit}' not found in source text"
                 )
 
         # ---------------- 3. 實質校驗 (Substance) ----------------
         # 實質審查必須由人工執行，系統自動校驗始終維持 human_status == 'pending'
         if finding.human_status != "pending":
+            substance_ok = False
             issues.append(
                 f"[substance] Finding {f_id}: human_status is '{finding.human_status}', expected 'pending'"
             )

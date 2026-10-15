@@ -93,6 +93,7 @@ def make_test_context(
         end_offset=len(doc_text),
         page_number=1,
         structural_path="第十條",
+        text=doc_text,
     )
     doc_status = {"main_contract.docx": "retrieved"}
     unknowns = []
@@ -106,7 +107,7 @@ def make_test_context(
         source_spans=[span],
         definitions={},
         exceptions=[],
-        citations=["第十條"],
+        citations=["第十條", doc_text],
         document_retrieval_status=doc_status,
         complete=complete and not missing_docs,
         unknowns=unknowns,
@@ -390,3 +391,131 @@ def test_finalize_run(repo: Repository):
     # 確認 run 狀態已推進為 DONE
     final_run = repo.get_run(run.run_id)
     assert final_run.state == RunState.DONE
+
+
+def test_finalize_run_omitted_requirement(repo: Repository):
+    """關鍵驗收：若模型回應遺漏了規劃的某項要求，finalize_run 絕不能標為 DONE，且 CoverageMatrix 必須捕獲該遺漏要求。"""
+    review = create_sample_review(repo)
+    run = create_sample_run(repo, review.case_id)
+
+    req1_id = str(uuid.uuid4())
+    req2_id = str(uuid.uuid4())
+    ctx1 = make_test_context(req_id=req1_id)
+    ctx2 = make_test_context(req_id=req2_id)
+
+    # 批次規劃包含 req1 與 req2
+    plan_review(run, [ctx1, ctx2], repo=repo, batch_size=2)
+
+    # 模型回覆僅包含 req1，完全遺漏了 req2
+    omitted_payload = {
+        "run_id": run.run_id,
+        "findings": [
+            {
+                "requirement_id": req1_id,
+                "clause_ids": ["c-10"],
+                "result": "compliant",
+                "risk": "low",
+                "reason": "第十條符合要求1之規定",
+            }
+        ],
+    }
+    art_id = repo.artifacts.put(
+        case_id=review.case_id,
+        kind="provider_reply",
+        data=json.dumps(omitted_payload).encode("utf-8"),
+    )
+    reply = ProviderReply(
+        reply_id=str(uuid.uuid4()),
+        request_id=str(uuid.uuid4()),
+        artifact_ref=art_id,
+        finish_reason="stop",
+    )
+    accept_review_reply(run.run_id, reply, repo)
+
+    # 執行收尾計算覆蓋矩陣
+    coverage = finalize_run(run.run_id, repo)
+    assert isinstance(coverage, CoverageMatrix)
+
+    # 核心斷言 1: run 狀態絕不可為 DONE（維持在 RUNNING）
+    final_run = repo.get_run(run.run_id)
+    assert final_run.state != RunState.DONE
+    assert final_run.state == RunState.RUNNING
+
+    # 核心斷言 2: CoverageMatrix 必須涵蓋被遺漏的 req2，且標記為 unprocessed / unresolved
+    assert req2_id in coverage.requirements
+    omitted_entry = coverage.requirements[req2_id]
+    assert omitted_entry.status == "unprocessed"
+    assert omitted_entry.processing == "unprocessed"
+    assert req2_id in coverage.unresolved_requirement_ids
+    assert req2_id in coverage.unresolved_ids
+
+
+def test_accept_review_reply_updates_specific_batch_and_failure(repo: Repository):
+    """驗證批次狀態精確更新：僅更新回覆對應之 batch_id，未回覆批次保持 planned；失敗時更新該批次為 failed。"""
+    review = create_sample_review(repo)
+    run = create_sample_run(repo, review.case_id)
+
+    req1_id = str(uuid.uuid4())
+    req2_id = str(uuid.uuid4())
+    ctx1 = make_test_context(req_id=req1_id)
+    ctx2 = make_test_context(req_id=req2_id)
+
+    # 依 batch_size=1 規劃出 2 個批次
+    drafts = plan_review(run, [ctx1, ctx2], repo=repo, batch_size=1)
+    assert len(drafts) == 2
+
+    batches_init = get_batch_status(run.run_id, repo)
+    assert len(batches_init) == 2
+    b1_id = batches_init[0]["batch_id"]
+    b2_id = batches_init[1]["batch_id"]
+    assert batches_init[0]["status"] == "planned"
+    assert batches_init[1]["status"] == "planned"
+
+    # 1. 回覆第 1 批次（包含 req1）
+    payload1 = {
+        "run_id": run.run_id,
+        "findings": [
+            {
+                "requirement_id": req1_id,
+                "clause_ids": ["c-10"],
+                "result": "compliant",
+                "risk": "low",
+                "reason": "批次1審查通過",
+            }
+        ],
+    }
+    art1_id = repo.artifacts.put(
+        case_id=review.case_id,
+        kind="provider_reply",
+        data=json.dumps(payload1).encode("utf-8"),
+    )
+    reply1 = ProviderReply(
+        reply_id=str(uuid.uuid4()),
+        request_id=str(uuid.uuid4()),
+        artifact_ref=art1_id,
+        finish_reason="stop",
+    )
+    accept_review_reply(run.run_id, reply1, repo, batch_id=b1_id)
+
+    # 驗證：僅 b1 變更為 done，b2 仍為 planned！
+    batches_mid = get_batch_status(run.run_id, repo)
+    b1_record = next(b for b in batches_mid if b["batch_id"] == b1_id)
+    b2_record = next(b for b in batches_mid if b["batch_id"] == b2_id)
+    assert b1_record["status"] == "done"
+    assert b2_record["status"] == "planned"
+
+    # 2. 回覆第 2 批次異常中斷（finish_reason != 'stop'）
+    reply2_fail = ProviderReply(
+        reply_id=str(uuid.uuid4()),
+        request_id=str(uuid.uuid4()),
+        artifact_ref="non_existent",
+        finish_reason="length",
+    )
+    accept_review_reply(run.run_id, reply2_fail, repo, batch_id=b2_id)
+
+    # 驗證：b2 狀態被標示為 failed，且附帶錯誤訊息
+    batches_after_fail = get_batch_status(run.run_id, repo)
+    b2_fail_record = next(b for b in batches_after_fail if b["batch_id"] == b2_id)
+    assert b2_fail_record["status"] == "failed"
+    assert b2_fail_record["error_message"] is not None
+    assert "truncated" in b2_fail_record["error_message"].lower() or "length" in b2_fail_record["error_message"].lower()

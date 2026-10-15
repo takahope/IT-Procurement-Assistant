@@ -1003,6 +1003,18 @@
           "default": "",
           "title": "Structural Path",
           "type": "string"
+        },
+        "text": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Text"
         }
       },
       "required": [
@@ -1762,6 +1774,18 @@
               "default": "",
               "title": "Structural Path",
               "type": "string"
+            },
+            "text": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Text"
             }
           },
           "required": [
@@ -2036,6 +2060,18 @@
               "default": "",
               "title": "Structural Path",
               "type": "string"
+            },
+            "text": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Text"
             }
           },
           "required": [
@@ -2523,6 +2559,18 @@
               "default": "",
               "title": "Structural Path",
               "type": "string"
+            },
+            "text": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Text"
             }
           },
           "required": [
@@ -2672,6 +2720,13 @@
           ],
           "default": null,
           "title": "Review Scope"
+        },
+        "citations": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Citations",
+          "type": "array"
         }
       },
       "required": [
@@ -3235,6 +3290,13 @@
               ],
               "default": null,
               "title": "Review Scope"
+            },
+            "citations": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Citations",
+              "type": "array"
             }
           },
           "required": [
@@ -3382,6 +3444,18 @@
               "default": "",
               "title": "Structural Path",
               "type": "string"
+            },
+            "text": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Text"
             }
           },
           "required": [

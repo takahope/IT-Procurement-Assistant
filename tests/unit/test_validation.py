@@ -31,6 +31,7 @@ def make_test_span(
         end_offset=end,
         page_number=1,
         structural_path="第十條",
+        text=text,
     )
 
 
@@ -69,6 +70,7 @@ def make_test_finding(
     rule_refs: list[VersionRef] | None = None,
     review_scope: str | None = None,
     human_status: str = "pending",
+    citations: list[str] | None = None,
 ) -> Finding:
     f_id = finding_id or str(uuid.uuid4())
     r_id = run_id or str(uuid.uuid4())
@@ -91,6 +93,7 @@ def make_test_finding(
         human_status=human_status,
         conclusion_nature=[SourceNature.APPLICABLE_LAW],
         review_scope=review_scope,
+        citations=citations or [],
     )
 
 
@@ -180,6 +183,47 @@ def test_source_validation_unconfirmed_source():
     assert any("unconfirmed" in issue.lower() for issue in report.issues)
 
 
+def test_source_validation_citation_mismatch():
+    """來源校驗：引文字串不存在於 context 來源文字（citations/block raw_text/spans）時，應校驗失敗。"""
+    run_id = str(uuid.uuid4())
+    req_id = str(uuid.uuid4())
+    doc_id = str(uuid.uuid4())
+    span = make_test_span(
+        doc_id=doc_id,
+        text="第十條 保密義務：廠商對於機密資訊應採取嚴密資安防護措施。",
+    )
+    ctx = make_test_context(
+        req_id=req_id,
+        spans=[span],
+        citations=["第十條 保密義務：廠商對於機密資訊應採取嚴密資安防護措施。"],
+    )
+
+    # 1. 引用了完全捏造、不存在的引文 -> 應校驗失敗
+    invalid_finding = make_test_finding(
+        run_id=run_id,
+        requirement_id=req_id,
+        evidence=[span],
+        citations=["廠商得自由公開機密資訊予任何第三方，無須中研院書面同意"],
+    )
+    report = validate_findings([invalid_finding], [ctx])
+    assert report.source_ok is False
+    assert isinstance(report.source, GateReport)
+    assert report.source.ok is False
+    assert any("Citation mismatch" in issue for issue in report.issues)
+
+    # 2. 引用真實存在之引文 -> 應順利通過
+    valid_finding = make_test_finding(
+        run_id=run_id,
+        requirement_id=req_id,
+        evidence=[span],
+        citations=["廠商對於機密資訊應採取嚴密資安防護措施"],
+    )
+    valid_report = validate_findings([valid_finding], [ctx])
+    assert valid_report.source_ok is True
+    assert isinstance(valid_report.source, GateReport)
+    assert valid_report.source.ok is True
+
+
 def test_substance_validation_remains_pending():
     """實質校驗：有效引用仍保持 human_status == 'pending'，不自動判定通過。"""
     run_id = str(uuid.uuid4())
@@ -201,6 +245,30 @@ def test_substance_validation_remains_pending():
     # 人工實質審查必須維持 pending
     assert finding.human_status == "pending"
     assert report.substance_ok is True
+    assert isinstance(report.substance, GateReport)
+    assert report.substance.ok is True
+
+
+def test_substance_validation_non_pending():
+    """實質校驗：若 finding human_status 非 pending，substance_ok 必為 False 並回傳 GateReport。"""
+    run_id = str(uuid.uuid4())
+    req_id = str(uuid.uuid4())
+    doc_id = str(uuid.uuid4())
+    span = make_test_span(doc_id=doc_id)
+
+    ctx = make_test_context(req_id=req_id, spans=[span])
+    finding = make_test_finding(
+        run_id=run_id,
+        requirement_id=req_id,
+        evidence=[span],
+        human_status="approved",  # 非 pending
+    )
+
+    report = validate_findings([finding], [ctx])
+    assert report.substance_ok is False
+    assert isinstance(report.substance, GateReport)
+    assert report.substance.ok is False
+    assert any("[substance]" in issue for issue in report.issues)
 
 
 def test_detect_cross_document_conflicts():

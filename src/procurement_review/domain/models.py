@@ -197,6 +197,7 @@ class SourceSpan(StrictBaseModel):
     end_offset: int
     page_number: int | None = None
     structural_path: str = ""
+    text: str | None = None
 
     @property
     def start(self) -> int:
@@ -507,6 +508,7 @@ class Finding(StrictBaseModel):
     human_status: str = "unreviewed"
     conclusion_nature: list[SourceNature] = Field(default_factory=list)
     review_scope: str | None = None
+    citations: list[str] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def validate_missing_finding_scope(self) -> "Finding":
@@ -535,6 +537,36 @@ class ValidationReport(StrictBaseModel):
     substance_ok: bool = True
     issues: list[str] = Field(default_factory=list)
     checked_at: datetime
+
+    @property
+    def structure(self) -> "GateReport":
+        issues = [i for i in self.issues if i.startswith("[structure]")]
+        return GateReport(
+            ok=self.structure_ok,
+            operation="structure_validation",
+            issues=issues,
+            checked_at=self.checked_at,
+        )
+
+    @property
+    def source(self) -> "GateReport":
+        issues = [i for i in self.issues if i.startswith("[source]")]
+        return GateReport(
+            ok=self.source_ok,
+            operation="source_validation",
+            issues=issues,
+            checked_at=self.checked_at,
+        )
+
+    @property
+    def substance(self) -> "GateReport":
+        issues = [i for i in self.issues if i.startswith("[substance]")]
+        return GateReport(
+            ok=self.substance_ok,
+            operation="substance_validation",
+            issues=issues,
+            checked_at=self.checked_at,
+        )
 
 
 class SuggestedChange(StrictBaseModel):
