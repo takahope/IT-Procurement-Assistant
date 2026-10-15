@@ -1,0 +1,32 @@
+{
+  "policy_id": "acceptance-policy-m3-v1",
+  "version": "1.0.0",
+  "description": "中央研究院資訊採購合約資安審查 M3 四類發布驗收政策",
+  "approved": true,
+  "approver": "中央研究院資訊採購法務與資安需求負責人",
+  "approval_date": "2026-10-15",
+  "zero_tolerance": {
+    "max_high_risk_false_compliant": 0,
+    "max_hallucinated_citations": 0,
+    "max_masking_leakage": 0,
+    "max_unauthorized_egress": 0,
+    "max_unauthorized_alterations": 0,
+    "max_cross_case_swaps": 0,
+    "allow_all_abstentions": false
+  },
+  "thresholds": {
+    "min_extraction_accuracy": 0.95,
+    "min_masking_precision": 0.95,
+    "min_masking_recall": 0.95,
+    "min_roundtrip_fidelity": 1.0,
+    "min_clause_coverage": 0.95,
+    "min_requirement_coverage": 0.95,
+    "min_draft_adoption_rate": 0.70,
+    "max_needs_confirmation_rate": 0.30,
+    "max_human_minutes_per_case": 30.0,
+    "max_human_cost_per_case": 500.0,
+    "min_citation_validity_rate": 1.0,
+    "min_citation_support_rate": 0.85,
+    "max_omission_rate": 0.10
+  }
+}

@@ -198,6 +198,24 @@ def build_parser() -> argparse.ArgumentParser:
         help="指定主資料金鑰 (合成模式備用)",
     )
 
+    # 5. evaluate 命令
+    evaluate_parser = subparsers.add_parser("evaluate", help="執行合約審查多維度評測與發布判定 (M3)")
+    evaluate_parser.add_argument(
+        "--manifest",
+        required=True,
+        help="評測資料集清單 JSON 檔案路徑",
+    )
+    evaluate_parser.add_argument(
+        "--output",
+        required=True,
+        help="評測報告輸出 JSON 檔案路徑",
+    )
+    evaluate_parser.add_argument(
+        "--policy",
+        default=None,
+        help="驗收判定政策 JSON 檔案路徑 (選填)",
+    )
+
     return parser
 
 
@@ -343,6 +361,44 @@ def main(argv: list[str] | None = None, secrets: SecretStore | None = None) -> N
                 print(f"[OK] 案件 {plan.case_id} 產物已成功安全清除並寫入 tombstone。")
             else:
                 print(f"[FAIL] 清除失敗: {report.issues}")
+
+    elif args.command == "evaluate":
+        from procurement_review.evaluation.runner import run_evaluation
+
+        result = run_evaluation(
+            manifest_path=args.manifest,
+            output_path=args.output,
+            policy_path=args.policy,
+        )
+        report = result.get("evaluation_report", {})
+        print("=" * 70)
+        print("合約審查評測報告 (M3 驗收)")
+        print(f"Manifest ID: {result.get('manifest_id')} (Mode: {result.get('mode')}, Split: {result.get('split')})")
+        print(f"總預期要求數: {report.get('total_expected')}, 實際審查數: {report.get('total_actual')}")
+        print(f"TP: {report.get('tp')}, FP: {report.get('fp')}, FN: {report.get('fn')}")
+        prec = report.get("precision")
+        rec = report.get("recall")
+        f1 = report.get("f1")
+        print(f"Precision: {f'{prec:.4f}' if prec is not None else 'N/A'}")
+        print(f"Recall:    {f'{rec:.4f}' if rec is not None else 'N/A'}")
+        print(f"F1-score:  {f'{f1:.4f}' if f1 is not None else 'N/A'}")
+        print(f"報告已輸出至: {args.output}")
+
+        if "gate_report" in result:
+            gate = result["gate_report"]
+            print("-" * 70)
+            print(f"發布判定狀態: {gate.get('status', '').upper()}")
+            if gate.get("ok"):
+                print("[PASS] 通過所有零容忍安全檢查與品質門檻！")
+            else:
+                print(f"[FAIL] 發布判定未通過，發現 {len(gate.get('failures', []))} 項不合規：")
+                for f in gate.get("failures", []):
+                    print(f"  - {f}")
+                raise DomainError(
+                    "RELEASE_GATE_FAILED",
+                    f"Release gate check failed with {len(gate.get('failures', []))} failure(s)",
+                )
+        print("=" * 70)
 
 
 if __name__ == "__main__":

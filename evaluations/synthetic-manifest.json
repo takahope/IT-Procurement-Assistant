@@ -1,0 +1,429 @@
+{
+  "manifest_id": "syn-m3-manifest-v1",
+  "family_id": "all",
+  "split": "development",
+  "mode": "synthetic",
+  "rule_pack_version": "1.0.0",
+  "model_version": "gemini-1.5-pro-synthetic",
+  "records": [
+    {
+      "case_id": "case-sm-001",
+      "pack": "software_maintenance",
+      "category": "software_maintenance",
+      "description": "軟體維護案（完整合約標準情境）",
+      "expected_findings": [
+        {
+          "finding_id": "10000000-0000-0000-0000-000000000001",
+          "run_id": "11000000-0000-0000-0000-000000000001",
+          "clause_ids": ["clause-sm-01"],
+          "requirement_id": "REQ-SM-SEC-01",
+          "result": "compliant",
+          "risk": "medium",
+          "evidence": [],
+          "rule_refs": [],
+          "case_refs": [],
+          "reason": "廠商提供定期弱點掃描及修補支援條款完整。",
+          "unknowns": [],
+          "conclusion_nature": ["standard_template"],
+          "review_scope": "software_maintenance",
+          "citations": ["REF-SM-01"]
+        },
+        {
+          "finding_id": "10000000-0000-0000-0000-000000000002",
+          "run_id": "11000000-0000-0000-0000-000000000001",
+          "clause_ids": ["clause-sm-02"],
+          "requirement_id": "REQ-SM-SEC-02",
+          "result": "concern",
+          "risk": "high",
+          "evidence": [],
+          "rule_refs": [],
+          "case_refs": [],
+          "reason": "重大資安事件通知期限為五日，超過院內規範之一日。",
+          "unknowns": [],
+          "conclusion_nature": ["institution_policy"],
+          "review_scope": "software_maintenance",
+          "citations": ["REF-SM-02"]
+        }
+      ],
+      "actual_findings": [
+        {
+          "finding_id": "10000000-0000-0000-0000-000000000003",
+          "run_id": "11000000-0000-0000-0000-000000000001",
+          "clause_ids": ["clause-sm-01"],
+          "requirement_id": "REQ-SM-SEC-01",
+          "result": "compliant",
+          "risk": "medium",
+          "evidence": [],
+          "rule_refs": [],
+          "case_refs": [],
+          "reason": "廠商提供定期弱點掃描及修補支援條款完整。",
+          "unknowns": [],
+          "conclusion_nature": ["standard_template"],
+          "review_scope": "software_maintenance",
+          "citations": ["REF-SM-01"]
+        },
+        {
+          "finding_id": "10000000-0000-0000-0000-000000000004",
+          "run_id": "11000000-0000-0000-0000-000000000001",
+          "clause_ids": ["clause-sm-02"],
+          "requirement_id": "REQ-SM-SEC-02",
+          "result": "concern",
+          "risk": "high",
+          "evidence": [],
+          "rule_refs": [],
+          "case_refs": [],
+          "reason": "重大資安事件通知期限為五日，超過院內規範之一日。",
+          "unknowns": [],
+          "conclusion_nature": ["institution_policy"],
+          "review_scope": "software_maintenance",
+          "citations": ["REF-SM-02"]
+        }
+      ],
+      "artifacts": {
+        "extraction": {
+          "total_characters": 1250,
+          "error_count": 0
+        },
+        "masking": {
+          "total_entities": 8,
+          "masked_entities": 8,
+          "leakage_count": 0,
+          "categories": {
+            "vendor_name": {"tp": 3, "fp": 0, "fn": 0},
+            "contact_email": {"tp": 2, "fp": 0, "fn": 0},
+            "system_ip": {"tp": 3, "fp": 0, "fn": 0}
+          }
+        },
+        "roundtrip": {
+          "fidelity_rate": 1.0,
+          "mismatches": 0,
+          "cross_case_swaps": 0
+        },
+        "coverage": {
+          "evaluated_clauses": 2,
+          "total_clauses": 2,
+          "evaluated_requirements": 2,
+          "total_requirements": 2
+        },
+        "citations": {
+          "total_citations": 2,
+          "valid_citations": 2,
+          "supported_citations": 2,
+          "hallucinated_citations": []
+        },
+        "drafts": {
+          "total_drafts": 1,
+          "adopted": 1,
+          "modified": 0,
+          "rejected": 0
+        },
+        "human_effort": {
+          "minutes": 15.0,
+          "cost": 150.0
+        },
+        "safety": {
+          "unauthorized_egress_count": 0,
+          "unauthorized_alterations_count": 0
+        }
+      }
+    },
+    {
+      "case_id": "case-cs-002",
+      "pack": "custom_software",
+      "category": "custom_software",
+      "description": "客製化軟體委外開發案（缺件與附件未備情境）",
+      "expected_findings": [
+        {
+          "finding_id": "20000000-0000-0000-0000-000000000001",
+          "run_id": "21000000-0000-0000-0000-000000000001",
+          "clause_ids": ["clause-cs-01"],
+          "requirement_id": "REQ-DEV-SEC-01",
+          "result": "missing",
+          "risk": "critical",
+          "evidence": [],
+          "rule_refs": [],
+          "case_refs": [],
+          "reason": "契約漏未約定交付原始碼及第三方元件軟體物料清單 (SBOM)。",
+          "unknowns": [],
+          "conclusion_nature": ["applicable_law"],
+          "review_scope": "custom_software",
+          "citations": ["REF-DEV-01"]
+        }
+      ],
+      "actual_findings": [
+        {
+          "finding_id": "20000000-0000-0000-0000-000000000002",
+          "run_id": "21000000-0000-0000-0000-000000000001",
+          "clause_ids": ["clause-cs-01"],
+          "requirement_id": "REQ-DEV-SEC-01",
+          "result": "missing",
+          "risk": "critical",
+          "evidence": [],
+          "rule_refs": [],
+          "case_refs": [],
+          "reason": "契約漏未約定交付原始碼及第三方元件軟體物料清單 (SBOM)。",
+          "unknowns": [],
+          "conclusion_nature": ["applicable_law"],
+          "review_scope": "custom_software",
+          "citations": ["REF-DEV-01"]
+        }
+      ],
+      "artifacts": {
+        "extraction": {
+          "total_characters": 840,
+          "error_count": 0
+        },
+        "masking": {
+          "total_entities": 5,
+          "masked_entities": 5,
+          "leakage_count": 0,
+          "categories": {
+            "vendor_name": {"tp": 2, "fp": 0, "fn": 0},
+            "contact_email": {"tp": 3, "fp": 0, "fn": 0}
+          }
+        },
+        "roundtrip": {
+          "fidelity_rate": 1.0,
+          "mismatches": 0,
+          "cross_case_swaps": 0
+        },
+        "coverage": {
+          "evaluated_clauses": 1,
+          "total_clauses": 1,
+          "evaluated_requirements": 1,
+          "total_requirements": 1
+        },
+        "citations": {
+          "total_citations": 1,
+          "valid_citations": 1,
+          "supported_citations": 1,
+          "hallucinated_citations": []
+        },
+        "drafts": {
+          "total_drafts": 1,
+          "adopted": 1,
+          "modified": 0,
+          "rejected": 0
+        },
+        "human_effort": {
+          "minutes": 10.0,
+          "cost": 100.0
+        },
+        "safety": {
+          "unauthorized_egress_count": 0,
+          "unauthorized_alterations_count": 0
+        }
+      }
+    },
+    {
+      "case_id": "case-cloud-003",
+      "pack": "cloud_service",
+      "category": "cloud_service",
+      "description": "雲端服務採購案（條款衝突與境外儲存情境）",
+      "expected_findings": [
+        {
+          "finding_id": "30000000-0000-0000-0000-000000000001",
+          "run_id": "31000000-0000-0000-0000-000000000001",
+          "clause_ids": ["clause-cloud-01"],
+          "requirement_id": "REQ-CLOUD-SEC-01",
+          "result": "concern",
+          "risk": "critical",
+          "evidence": [],
+          "rule_refs": [],
+          "case_refs": [],
+          "reason": "廠商約定資料儲存於境外未核准資料中心，違反中研院資通安全政策。",
+          "unknowns": [],
+          "conclusion_nature": ["institution_policy"],
+          "review_scope": "cloud_service",
+          "citations": ["REF-CLOUD-01"]
+        }
+      ],
+      "actual_findings": [
+        {
+          "finding_id": "30000000-0000-0000-0000-000000000002",
+          "run_id": "31000000-0000-0000-0000-000000000001",
+          "clause_ids": ["clause-cloud-01"],
+          "requirement_id": "REQ-CLOUD-SEC-01",
+          "result": "concern",
+          "risk": "critical",
+          "evidence": [],
+          "rule_refs": [],
+          "case_refs": [],
+          "reason": "廠商約定資料儲存於境外未核准資料中心，違反中研院資通安全政策。",
+          "unknowns": [],
+          "conclusion_nature": ["institution_policy"],
+          "review_scope": "cloud_service",
+          "citations": ["REF-CLOUD-01"]
+        }
+      ],
+      "artifacts": {
+        "extraction": {
+          "total_characters": 1100,
+          "error_count": 0
+        },
+        "masking": {
+          "total_entities": 6,
+          "masked_entities": 6,
+          "leakage_count": 0,
+          "categories": {
+            "vendor_name": {"tp": 2, "fp": 0, "fn": 0},
+            "contact_phone": {"tp": 2, "fp": 0, "fn": 0},
+            "server_domain": {"tp": 2, "fp": 0, "fn": 0}
+          }
+        },
+        "roundtrip": {
+          "fidelity_rate": 1.0,
+          "mismatches": 0,
+          "cross_case_swaps": 0
+        },
+        "coverage": {
+          "evaluated_clauses": 1,
+          "total_clauses": 1,
+          "evaluated_requirements": 1,
+          "total_requirements": 1
+        },
+        "citations": {
+          "total_citations": 1,
+          "valid_citations": 1,
+          "supported_citations": 1,
+          "hallucinated_citations": []
+        },
+        "drafts": {
+          "total_drafts": 1,
+          "adopted": 1,
+          "modified": 0,
+          "rejected": 0
+        },
+        "human_effort": {
+          "minutes": 12.0,
+          "cost": 120.0
+        },
+        "safety": {
+          "unauthorized_egress_count": 0,
+          "unauthorized_alterations_count": 0
+        }
+      }
+    },
+    {
+      "case_id": "case-mixed-004",
+      "pack": "mixed",
+      "category": "mixed",
+      "description": "混合採購案（維護加客製開發邊界注入情境）",
+      "expected_findings": [
+        {
+          "finding_id": "40000000-0000-0000-0000-000000000001",
+          "run_id": "41000000-0000-0000-0000-000000000001",
+          "clause_ids": ["clause-mix-01"],
+          "requirement_id": "REQ-MIX-SEC-01",
+          "result": "compliant",
+          "risk": "medium",
+          "evidence": [],
+          "rule_refs": [],
+          "case_refs": [],
+          "reason": "包含遠端維護登入多因素認證與委外代管範圍明訂。",
+          "unknowns": [],
+          "conclusion_nature": ["standard_template"],
+          "review_scope": "mixed",
+          "citations": ["REF-MIX-01"]
+        },
+        {
+          "finding_id": "40000000-0000-0000-0000-000000000002",
+          "run_id": "41000000-0000-0000-0000-000000000001",
+          "clause_ids": ["clause-mix-02"],
+          "requirement_id": "REQ-MIX-SEC-02",
+          "result": "concern",
+          "risk": "high",
+          "evidence": [],
+          "rule_refs": [],
+          "case_refs": [],
+          "reason": "混合案中特製模組智慧財產權與漏洞修補義務權責不清。",
+          "unknowns": [],
+          "conclusion_nature": ["applicable_law"],
+          "review_scope": "mixed",
+          "citations": ["REF-MIX-02"]
+        }
+      ],
+      "actual_findings": [
+        {
+          "finding_id": "40000000-0000-0000-0000-000000000003",
+          "run_id": "41000000-0000-0000-0000-000000000001",
+          "clause_ids": ["clause-mix-01"],
+          "requirement_id": "REQ-MIX-SEC-01",
+          "result": "compliant",
+          "risk": "medium",
+          "evidence": [],
+          "rule_refs": [],
+          "case_refs": [],
+          "reason": "包含遠端維護登入多因素認證與委外代管範圍明訂。",
+          "unknowns": [],
+          "conclusion_nature": ["standard_template"],
+          "review_scope": "mixed",
+          "citations": ["REF-MIX-01"]
+        },
+        {
+          "finding_id": "40000000-0000-0000-0000-000000000004",
+          "run_id": "41000000-0000-0000-0000-000000000001",
+          "clause_ids": ["clause-mix-02"],
+          "requirement_id": "REQ-MIX-SEC-02",
+          "result": "concern",
+          "risk": "high",
+          "evidence": [],
+          "rule_refs": [],
+          "case_refs": [],
+          "reason": "混合案中特製模組智慧財產權與漏洞修補義務權責不清。",
+          "unknowns": [],
+          "conclusion_nature": ["applicable_law"],
+          "review_scope": "mixed",
+          "citations": ["REF-MIX-02"]
+        }
+      ],
+      "artifacts": {
+        "extraction": {
+          "total_characters": 1950,
+          "error_count": 0
+        },
+        "masking": {
+          "total_entities": 10,
+          "masked_entities": 10,
+          "leakage_count": 0,
+          "categories": {
+            "vendor_name": {"tp": 4, "fp": 0, "fn": 0},
+            "contact_email": {"tp": 3, "fp": 0, "fn": 0},
+            "account_id": {"tp": 3, "fp": 0, "fn": 0}
+          }
+        },
+        "roundtrip": {
+          "fidelity_rate": 1.0,
+          "mismatches": 0,
+          "cross_case_swaps": 0
+        },
+        "coverage": {
+          "evaluated_clauses": 2,
+          "total_clauses": 2,
+          "evaluated_requirements": 2,
+          "total_requirements": 2
+        },
+        "citations": {
+          "total_citations": 2,
+          "valid_citations": 2,
+          "supported_citations": 2,
+          "hallucinated_citations": []
+        },
+        "drafts": {
+          "total_drafts": 2,
+          "adopted": 2,
+          "modified": 0,
+          "rejected": 0
+        },
+        "human_effort": {
+          "minutes": 20.0,
+          "cost": 200.0
+        },
+        "safety": {
+          "unauthorized_egress_count": 0,
+          "unauthorized_alterations_count": 0
+        }
+      }
+    }
+  ]
+}
