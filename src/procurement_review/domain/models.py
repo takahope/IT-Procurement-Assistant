@@ -222,6 +222,14 @@ class Review(StrictBaseModel):
     confirmation_history: list[dict[str, Any]] = Field(default_factory=list)
     revision: int = 1
 
+    @property
+    def id(self) -> str:
+        return str(self.case_id)
+
+    @property
+    def review_id(self) -> str:
+        return str(self.case_id)
+
 
 class ReviewRun(StrictBaseModel):
     """單次審查執行管線記錄"""
@@ -249,6 +257,10 @@ class ReviewRun(StrictBaseModel):
     attempts: int = 0
     egress_approval_ref: VersionRef | None = None
     error_message: str | None = None
+
+    @property
+    def id(self) -> str:
+        return str(self.run_id)
 
     @field_validator("cost_usd", mode="before")
     @classmethod
@@ -417,6 +429,10 @@ class Finding(StrictBaseModel):
             )
         return self
 
+    @property
+    def id(self) -> str:
+        return str(self.finding_id)
+
 
 class ValidationReport(StrictBaseModel):
     """校驗報告：分層檢查結構、來源與實質"""
@@ -469,6 +485,10 @@ class Feedback(StrictBaseModel):
     operator: str
     created_at: datetime
     version: int = 1
+
+    @property
+    def id(self) -> str:
+        return str(self.feedback_id)
 
 
 class ReviewReport(StrictBaseModel):

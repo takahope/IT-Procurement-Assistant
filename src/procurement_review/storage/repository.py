@@ -1,6 +1,8 @@
 import hashlib
 import sqlite3
 import uuid
+from collections.abc import Generator
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -15,14 +17,6 @@ from procurement_review.domain.models import (
     VersionRef,
 )
 from procurement_review.storage.vault import ArtifactStore
-
-# 便利屬性：讓 ReviewRun.id、Review.id 與 Feedback.id 可作為常規屬性存取
-if not hasattr(ReviewRun, "id"):
-    ReviewRun.id = property(lambda self: self.run_id)  # type: ignore[attr-defined]
-if not hasattr(Review, "id"):
-    Review.id = property(lambda self: self.case_id)  # type: ignore[attr-defined]
-if not hasattr(Feedback, "id"):
-    Feedback.id = property(lambda self: self.feedback_id)  # type: ignore[attr-defined]
 
 
 def _hash_rule_refs(rule_refs: list[VersionRef]) -> str:
@@ -61,10 +55,18 @@ class Repository:
         conn.execute("PRAGMA foreign_keys = ON;")
         return conn
 
-    def _init_db(self) -> None:
-        # Set journal mode to WAL outside of any transaction
+    @contextmanager
+    def _conn(self) -> Generator[sqlite3.Connection]:
         conn = self._get_conn()
         try:
+            with conn:
+                yield conn
+        finally:
+            conn.close()
+
+    def _init_db(self) -> None:
+        # Set journal mode to WAL outside of any transaction
+        with self._conn() as conn:
             conn.execute("PRAGMA journal_mode = WAL;")
             conn.execute(
                 """
@@ -92,8 +94,6 @@ class Repository:
                     "INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)",
                     ("001_initial.sql", datetime.now(UTC).isoformat()),
                 )
-        finally:
-            conn.close()
 
     def save_review(
         self,
@@ -107,7 +107,7 @@ class Repository:
         - 若文件內容雜湊 (original_file_hash) 變更，自動使該案所有 active runs 失效。
         """
         now_iso = datetime.now(UTC).isoformat()
-        with self._get_conn() as conn:
+        with self._conn() as conn:
             conn.execute("BEGIN IMMEDIATE;")
             cursor = conn.cursor()
             cursor.execute(
@@ -216,7 +216,7 @@ class Repository:
 
     def get_review(self, id: str, revision: int | None = None) -> Review:
         """取得指定案件審查。若 revision 為 None 則回傳最新版本。"""
-        with self._get_conn() as conn:
+        with self._conn() as conn:
             cursor = conn.cursor()
             if revision is None:
                 cursor.execute(
@@ -256,13 +256,22 @@ class Repository:
         run_id = str(uuid.uuid4())
         now_iso = datetime.now(UTC).isoformat()
 
+        # 去除重複之 rule_refs (by id, version)
+        seen_rules: set[tuple[str, str]] = set()
+        deduped_rules: list[VersionRef] = []
+        for r in rule_refs:
+            key = (r.id, r.version)
+            if key not in seen_rules:
+                seen_rules.add(key)
+                deduped_rules.append(r)
+
         input_version = VersionRef(
             id=review.case_id,
             version=str(review.revision),
             sha256=review.original_file_hash,
         )
 
-        rules_hash = _hash_rule_refs(rule_refs)
+        rules_hash = _hash_rule_refs(deduped_rules)
         rules_snapshot_id = str(
             uuid.uuid5(uuid.NAMESPACE_DNS, f"ruleset:{review_id}:{rules_hash}")
         )
@@ -299,7 +308,7 @@ class Repository:
             data=data,
         )
 
-        with self._get_conn() as conn:
+        with self._conn() as conn:
             conn.execute("BEGIN IMMEDIATE;")
             cursor = conn.cursor()
             cursor.execute(
@@ -318,10 +327,10 @@ class Repository:
                     now_iso,
                 ),
             )
-            for rule in rule_refs:
+            for rule in deduped_rules:
                 cursor.execute(
                     """
-                    INSERT INTO run_rules (run_id, rule_id, rule_version, rule_sha256)
+                    INSERT OR IGNORE INTO run_rules (run_id, rule_id, rule_version, rule_sha256)
                     VALUES (?, ?, ?, ?)
                     """,
                     (run.run_id, rule.id, rule.version, rule.sha256),
@@ -332,7 +341,7 @@ class Repository:
 
     def get_run(self, id: str) -> ReviewRun:
         """取得執行管線記錄，並疊加資料庫之即時狀態與 stale 標記。"""
-        with self._get_conn() as conn:
+        with self._conn() as conn:
             cursor = conn.cursor()
             cursor.execute(
                 "SELECT case_id, state, stale, artifact_ref FROM runs WHERE run_id = ?",
@@ -355,11 +364,11 @@ class Repository:
     def save_run(self, run: ReviewRun) -> ReviewRun:
         """更新執行管線狀態與中繼屬性。"""
         now_iso = datetime.now(UTC).isoformat()
-        with self._get_conn() as conn:
+        with self._conn() as conn:
             conn.execute("BEGIN IMMEDIATE;")
             cursor = conn.cursor()
             cursor.execute(
-                "SELECT case_id FROM runs WHERE run_id = ?",
+                "SELECT case_id, stale FROM runs WHERE run_id = ?",
                 (run.run_id,),
             )
             row = cursor.fetchone()
@@ -368,7 +377,14 @@ class Repository:
                 raise DomainError("RUN_NOT_FOUND", f"Run '{run.run_id}' not found")
 
             case_id = row["case_id"]
-            payload = run.model_dump_json().encode("utf-8")
+            db_stale = bool(row["stale"])
+            effective_stale = db_stale or run.stale
+
+            payload = (
+                run.model_copy(update={"stale": effective_stale})
+                .model_dump_json()
+                .encode("utf-8")
+            )
             artifact_id = self.artifacts.put(
                 case_id=case_id,
                 kind="run_data",
@@ -378,7 +394,7 @@ class Repository:
             cursor.execute(
                 """
                 UPDATE runs
-                SET state = ?, stale = ?, artifact_ref = ?, updated_at = ?
+                SET state = ?, stale = CASE WHEN stale = 1 THEN 1 ELSE ? END, artifact_ref = ?, updated_at = ?
                 WHERE run_id = ?
                 """,
                 (
@@ -390,12 +406,12 @@ class Repository:
                 ),
             )
             conn.commit()
-            return run
+            return run.model_copy(update={"stale": effective_stale})
 
     def invalidate(self, review_id: str, reason: str) -> list[str]:
         """使特定案件之所有作用中執行管線 (stale=False) 失效，回傳被失效的 run ID 清單。"""
         now_iso = datetime.now(UTC).isoformat()
-        with self._get_conn() as conn:
+        with self._conn() as conn:
             conn.execute("BEGIN IMMEDIATE;")
             cursor = conn.cursor()
             cursor.execute(
@@ -420,7 +436,7 @@ class Repository:
     def invalidate_runs_by_rule(self, rule_id: str, reason: str) -> list[str]:
         """依據規則 ID 反向查詢引用該規則之所有作用中執行管線，並標記為失效。"""
         now_iso = datetime.now(UTC).isoformat()
-        with self._get_conn() as conn:
+        with self._conn() as conn:
             conn.execute("BEGIN IMMEDIATE;")
             cursor = conn.cursor()
             cursor.execute(
@@ -451,7 +467,7 @@ class Repository:
     def save_finding(self, finding: Finding) -> None:
         """儲存審查發現至加密受控庫與索引庫。"""
         now_iso = datetime.now(UTC).isoformat()
-        with self._get_conn() as conn:
+        with self._conn() as conn:
             conn.execute("BEGIN IMMEDIATE;")
             cursor = conn.cursor()
             cursor.execute(
@@ -476,8 +492,20 @@ class Repository:
 
             cursor.execute(
                 """
-                INSERT OR REPLACE INTO findings (finding_id, run_id, requirement_id, result, risk, artifact_ref, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO findings (
+                    finding_id, run_id, requirement_id, result, risk, human_status,
+                    finding_artifact_id, artifact_ref, created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(finding_id) DO UPDATE SET
+                    run_id = excluded.run_id,
+                    requirement_id = excluded.requirement_id,
+                    result = excluded.result,
+                    risk = excluded.risk,
+                    human_status = excluded.human_status,
+                    finding_artifact_id = excluded.finding_artifact_id,
+                    artifact_ref = excluded.artifact_ref,
+                    updated_at = excluded.updated_at
                 """,
                 (
                     finding.finding_id,
@@ -485,7 +513,10 @@ class Repository:
                     finding.requirement_id,
                     finding.result.value,
                     finding.risk.value,
+                    finding.human_status,
                     artifact_id,
+                    artifact_id,
+                    now_iso,
                     now_iso,
                 ),
             )
@@ -493,7 +524,7 @@ class Repository:
 
     def get_finding(self, finding_id: str) -> Finding:
         """取得單一審查發現。"""
-        with self._get_conn() as conn:
+        with self._conn() as conn:
             cursor = conn.cursor()
             cursor.execute(
                 """
@@ -522,7 +553,7 @@ class Repository:
         若提供相同的 idempotency_key，則直接回傳既有回饋記錄，不產生重複記錄。
         """
         now_iso = datetime.now(UTC).isoformat()
-        with self._get_conn() as conn:
+        with self._conn() as conn:
             conn.execute("BEGIN IMMEDIATE;")
             cursor = conn.cursor()
 

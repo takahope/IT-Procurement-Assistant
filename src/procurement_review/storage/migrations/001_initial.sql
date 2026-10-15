@@ -58,8 +58,11 @@ CREATE TABLE IF NOT EXISTS findings (
     requirement_id TEXT NOT NULL,
     result TEXT NOT NULL,
     risk TEXT NOT NULL,
+    human_status TEXT NOT NULL DEFAULT 'unreviewed',
+    finding_artifact_id TEXT,
     artifact_ref TEXT NOT NULL,
     created_at TEXT NOT NULL,
+    updated_at TEXT,
     FOREIGN KEY (run_id) REFERENCES runs(run_id) ON DELETE CASCADE
 );
 

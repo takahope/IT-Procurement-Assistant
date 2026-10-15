@@ -1,3 +1,4 @@
+import sqlite3
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
@@ -243,3 +244,156 @@ def test_no_sensitive_plaintext_in_sqlite_and_wal(
     # Ensure repository can retrieve and decrypt it properly
     retrieved = repo.get_review(sample.case_id)
     assert secret_phrase in (retrieved.facts.service_scope or "")
+
+
+def test_save_finding_update_preserves_feedback(repo: Repository):
+    """驗證更新 finding 時，不會觸發 ON DELETE CASCADE 導致既有 feedback 被刪除。"""
+    review = repo.save_review(make_sample_review(), expected_revision=None)
+    run = repo.create_run(review.case_id, rule_refs=[])
+
+    finding_id = str(uuid.uuid4())
+    finding = Finding(
+        finding_id=finding_id,
+        run_id=run.run_id,
+        clause_ids=["clause-01"],
+        requirement_id="req-enc-01",
+        result=ResultEnum.CONCERN,
+        risk=RiskLevel.HIGH,
+        reason="Lack of encryption at rest",
+        human_status="unreviewed",
+    )
+    repo.save_finding(finding)
+
+    decision = HumanDecision(
+        decision_id=str(uuid.uuid4()),
+        finding_id=finding_id,
+        action=HumanDecisionAction.MODIFY,
+        final_text="Must enable AES-256",
+        reason="Compliance requirement",
+        decided_by="security_officer",
+        decided_at=datetime.now(UTC),
+    )
+    feedback = Feedback(
+        feedback_id=str(uuid.uuid4()),
+        finding_id=finding_id,
+        run_id=run.run_id,
+        original_result=finding.result,
+        human_decision=decision,
+        operator="security_officer",
+        created_at=datetime.now(UTC),
+        version=1,
+    )
+    fb = repo.append_feedback(feedback, idempotency_key="fb-preserve-key")
+    assert fb.feedback_id == feedback.feedback_id
+
+    # 更新 finding 屬性（如 result, risk, human_status 等）
+    updated_finding = finding.model_copy(
+        update={
+            "result": ResultEnum.COMPLIANT,
+            "risk": RiskLevel.CRITICAL,
+            "human_status": "reviewed",
+            "reason": "Escalated to compliant after remediation",
+        }
+    )
+    repo.save_finding(updated_finding)
+
+    # 驗證 finding 更新成功
+    refetched_finding = repo.get_finding(finding_id)
+    assert refetched_finding.result == ResultEnum.COMPLIANT
+    assert refetched_finding.risk == RiskLevel.CRITICAL
+    assert refetched_finding.human_status == "reviewed"
+
+    # 核心斷言：關聯的 feedback 依然存在，未被 CASCADE 刪除
+    # 透過 append_feedback 傳入同 idempotency_key，應直接查出既有 feedback
+    existing_fb = repo.append_feedback(feedback, idempotency_key="fb-preserve-key")
+    assert existing_fb.feedback_id == feedback.feedback_id
+
+    # 直接透過連線查詢 feedbacks 表確認數量依然為 1
+    with repo._conn() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT count(*) FROM feedbacks WHERE finding_id = ?", (finding_id,)
+        )
+        count = cursor.fetchone()[0]
+        assert count == 1
+
+
+def test_save_run_does_not_revive_stale_run(repo: Repository):
+    """驗證已被標記為 stale 的 run，即便在記憶體中持有 stale=False 的物件並呼叫 save_run，也不會使其復生 (unstale)。"""
+    review = repo.save_review(make_sample_review(), expected_revision=None)
+    run = repo.create_run(review.case_id, rule_refs=[])
+    assert run.stale is False
+
+    # 在記憶體中持有 stale=False 的物件
+    in_memory_run = repo.get_run(run.run_id)
+    assert in_memory_run.stale is False
+
+    # 外部事件（如顯式 invalidate）使資料庫中的 run 變為 stale=1
+    invalidated_ids = repo.invalidate(review.case_id, reason="Policy revocation")
+    assert run.run_id in invalidated_ids
+    assert repo.get_run(run.run_id).stale is True
+
+    # 模擬記憶體中持有舊物件的背景任務呼叫 save_run 更新狀態
+    updated_in_memory = in_memory_run.model_copy(update={"route": "custom_route"})
+    saved_result = repo.save_run(updated_in_memory)
+
+    # 核心斷言：save_run 回傳值與資料庫中皆保持 stale=True，未被意外復生為 stale=False
+    assert saved_result.stale is True
+    refetched = repo.get_run(run.run_id)
+    assert refetched.stale is True
+    assert refetched.route == "custom_route"
+
+    with repo._conn() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT stale FROM runs WHERE run_id = ?", (run.run_id,))
+        stale_in_db = cursor.fetchone()[0]
+        assert stale_in_db == 1
+
+
+def test_connections_closed_without_descriptor_leaks(repo: Repository):
+    """驗證 repository 操作正常關閉資料庫連線，不會洩漏檔案描述符 (file descriptors)。"""
+    review = repo.save_review(make_sample_review(), expected_revision=None)
+
+    # 取得操作前的檔案描述符數量（若平台支援 /dev/fd）
+    dev_fd = Path("/dev/fd")
+    if dev_fd.exists():
+        initial_fds = len(list(dev_fd.iterdir()))
+
+        # 連續執行多個讀寫操作
+        for _ in range(30):
+            r = repo.get_review(review.case_id)
+            repo.save_review(r, expected_revision=r.revision)
+
+        final_fds = len(list(dev_fd.iterdir()))
+        # 允許合理波動，但不應持續增長 30 個 descriptors
+        assert final_fds - initial_fds < 5
+
+    # 驗證 _conn context manager 在正常退出時調用 close()
+    with repo._conn() as conn:
+        assert conn is not None
+    with pytest.raises(sqlite3.ProgrammingError, match="Cannot operate on a closed database"):
+        conn.execute("SELECT 1;")
+
+    # 驗證 _conn context manager 在拋出異常時亦保證調用 close()
+    with pytest.raises(DomainError):
+        repo.save_review(review, expected_revision=999)
+
+    try:
+        with repo._conn() as conn2:
+            raise RuntimeError("test error")
+    except RuntimeError:
+        pass
+    with pytest.raises(sqlite3.ProgrammingError, match="Cannot operate on a closed database"):
+        conn2.execute("SELECT 1;")
+
+
+def test_create_run_deduplicates_rule_refs(repo: Repository):
+    """驗證 create_run 傳入重複的 rule_refs 時，自動去重並成功寫入 run_rules。"""
+    review = repo.save_review(make_sample_review(), expected_revision=None)
+    rule_id = str(uuid.uuid4())
+    ref1 = VersionRef(id=rule_id, version="1.0", sha256="sha1")
+    ref2 = VersionRef(id=rule_id, version="1.0", sha256="sha1")  # duplicate
+
+    run = repo.create_run(review.case_id, rule_refs=[ref1, ref2])
+    assert run.run_id is not None
+
