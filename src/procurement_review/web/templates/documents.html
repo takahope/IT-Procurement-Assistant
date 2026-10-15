@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+
+{% block title %}文件與文字校正 - {{ review.title }}{% endblock %}
+
+{% block content %}
+<div class="case-nav">
+    <a href="/cases/{{ case_id }}/scope">1. 範疇與事實</a>
+    <a href="/cases/{{ case_id }}/documents" class="active">2. 文件與校正</a>
+    <a href="/cases/{{ case_id }}/masking">3. 機敏遮罩</a>
+    <a href="/cases/{{ case_id }}/egress">4. 出站預覽</a>
+    <a href="/cases/{{ case_id }}/review">5. 審查與決定</a>
+</div>
+
+<div class="card">
+    <div class="card-title">上傳契約文件 (.docx 或 .pdf)</div>
+    <form id="upload-form" enctype="multipart/form-data">
+        <div class="form-group">
+            <input type="file" id="file-input" accept=".docx,.pdf" required>
+        </div>
+        <button type="submit">開始解析與分段</button>
+    </form>
+</div>
+
+<div class="card">
+    <div class="card-title">
+        文件結構與區塊清單
+        {% if snapshot %}
+            <span class="badge badge-info">{{ snapshot.blocks | length }} 區塊</span>
+            {% if snapshot.confirmation_ref %}
+                <span class="badge badge-success">已確認文字 (Confirmed)</span>
+            {% else %}
+                <span class="badge badge-warning">待確認 (Pending Confirmation)</span>
+            {% endif %}
+        {% endif %}
+    </div>
+
+    {% if snapshot %}
+        <p><strong>原始檔名：</strong>{{ snapshot.original_filename }}</p>
+        <p><strong>SHA-256：</strong><code>{{ snapshot.content_sha256 }}</code></p>
+
+        {% if snapshot.issues %}
+        <div style="margin: 1rem 0; padding: 0.75rem; background-color: #fef2f2; border: 1px solid #fecaca; border-radius: 4px;">
+            <strong style="color: var(--danger-color);">文件品質與結構待確認事項 ({{ snapshot.issues | length }} 處)：</strong>
+            <ul>
+                {% for issue in snapshot.issues %}
+                <li>區塊 <code>{{ issue.block_id }}</code>: {{ issue.issue_type }} - {{ issue.description }} <span class="badge badge-warning">待確認</span></li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+
+        <h3 style="margin-top: 1.5rem; margin-bottom: 0.5rem;">區塊預覽與人工校正</h3>
+        <form id="confirm-form">
+            {% for b in snapshot.blocks[:10] %}
+            <div style="margin-bottom: 1rem; border: 1px solid var(--border-color); padding: 0.75rem; border-radius: 4px; background-color: #ffffff;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">
+                    <strong>區塊 ID: {{ b.block_id }} (頁碼: {{ b.page_number or 1 }})</strong>
+                    <small style="color: var(--text-muted);">{{ b.structural_path }}</small>
+                </div>
+                <textarea class="block-editor" data-block-id="{{ b.block_id }}" rows="3">{{ b.raw_text }}</textarea>
+            </div>
+            {% endfor %}
+            <button type="submit" class="btn btn-secondary">儲存文字人工校正 (Confirm Text)</button>
+            <a href="/cases/{{ case_id }}/masking" class="btn">下一步：機敏遮罩</a>
+        </form>
+    {% else %}
+        <p style="color: var(--text-muted); padding: 1rem 0;">目前尚未上傳合約文件。請在上方選擇 .docx 或 .pdf 上傳。</p>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('upload-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const file = document.getElementById('file-input').files[0];
+    if (!file) return;
+
+    const fd = new FormData();
+    fd.append('file', file);
+
+    try {
+        const btn = e.target.querySelector('button');
+        btn.disabled = true;
+        btn.textContent = '解析中...';
+        await apiRequest('/api/cases/{{ case_id }}/documents/upload', {
+            method: 'POST',
+            body: fd
+        });
+        alert('文件解析與條款分段完成！');
+        _isFormDirty = false;
+        window.location.reload();
+    } catch (err) {
+        alert('上傳失敗: ' + err.message);
+        e.target.querySelector('button').disabled = false;
+        e.target.querySelector('button').textContent = '開始解析與分段';
+    }
+});
+
+const confirmForm = document.getElementById('confirm-form');
+if (confirmForm) {
+    confirmForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const editors = document.querySelectorAll('.block-editor');
+        const corrected = [];
+        editors.forEach(ed => {
+            corrected.push({
+                block_id: ed.getAttribute('data-block-id'),
+                raw_text: ed.value
+            });
+        });
+
+        try {
+            await apiRequest('/api/cases/{{ case_id }}/documents/confirm', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ corrected_blocks: corrected })
+            });
+            alert('人工文字確認已記錄！');
+            _isFormDirty = false;
+            window.location.reload();
+        } catch (err) {
+            alert('確認記錄失敗: ' + err.message);
+        }
+    });
+}
+</script>
+{% endblock %}

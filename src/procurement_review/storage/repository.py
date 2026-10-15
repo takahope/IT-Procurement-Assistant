@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from procurement_review.domain.enums import RunState
+from procurement_review.domain.enums import RuleStatus, RunState
 from procurement_review.domain.errors import DomainError
 from procurement_review.domain.models import (
     Feedback,
@@ -30,6 +30,24 @@ def _hash_rule_refs(rule_refs: list[VersionRef]) -> str:
     for ref in sorted(rule_refs, key=lambda r: (r.id, r.version)):
         hasher.update(f"{ref.id}:{ref.version}:{ref.sha256}\n".encode())
     return hasher.hexdigest()
+
+
+_run_invalidation_reasons: dict[str, str] = {}
+
+
+def _get_invalidation_reason(self: ReviewRun) -> str | None:
+    return _run_invalidation_reasons.get(str(self.run_id))
+
+
+def _set_invalidation_reason(self: ReviewRun, val: str | None) -> None:
+    if val is not None:
+        _run_invalidation_reasons[str(self.run_id)] = val
+    elif str(self.run_id) in _run_invalidation_reasons:
+        del _run_invalidation_reasons[str(self.run_id)]
+
+
+if not hasattr(ReviewRun, "invalidation_reason"):
+    ReviewRun.invalidation_reason = property(_get_invalidation_reason, _set_invalidation_reason)
 
 
 class Repository:
@@ -343,7 +361,7 @@ class Repository:
         with self._conn() as conn:
             cursor = conn.cursor()
             cursor.execute(
-                "SELECT case_id, state, stale, artifact_ref FROM runs WHERE run_id = ?",
+                "SELECT case_id, state, stale, invalidation_reason, artifact_ref FROM runs WHERE run_id = ?",
                 (id,),
             )
             row = cursor.fetchone()
@@ -353,12 +371,15 @@ class Repository:
             case_id = row["case_id"]
             db_state = RunState(row["state"])
             db_stale = bool(row["stale"])
+            invalidation_reason = row["invalidation_reason"]
             artifact_ref = row["artifact_ref"]
 
         raw_data = self.artifacts.get(case_id=case_id, artifact_id=artifact_ref)
         run = ReviewRun.model_validate_json(raw_data)
         # 疊加目前資料庫狀態與 stale 標記
-        return run.model_copy(update={"state": db_state, "stale": db_stale})
+        run = run.model_copy(update={"state": db_state, "stale": db_stale})
+        run.invalidation_reason = invalidation_reason
+        return run
 
     def save_run(self, run: ReviewRun) -> ReviewRun:
         """更新執行管線狀態與中繼屬性。"""
@@ -827,4 +848,85 @@ class Repository:
             data = self.artifacts.get(case_id=req_id, artifact_id=art_ref)
             results.append(Requirement.model_validate_json(data))
         return results
+
+    def list_reviews(self) -> list[Review]:
+        """查詢所有案件審查。"""
+        with self._conn() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT case_id, artifact_ref FROM reviews ORDER BY created_at DESC")
+            rows = cursor.fetchall()
+        results: list[Review] = []
+        for row in rows:
+            data = self.artifacts.get(case_id=row["case_id"], artifact_id=row["artifact_ref"])
+            results.append(Review.model_validate_json(data))
+        return results
+
+    def list_runs_for_case(self, case_id: str) -> list[ReviewRun]:
+        """查詢案件所屬之所有審查執行管線。"""
+        with self._conn() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT artifact_ref FROM runs WHERE case_id = ? ORDER BY created_at DESC",
+                (case_id,),
+            )
+            rows = cursor.fetchall()
+        results: list[ReviewRun] = []
+        for row in rows:
+            data = self.artifacts.get(case_id=case_id, artifact_id=row["artifact_ref"])
+            results.append(ReviewRun.model_validate_json(data))
+        return results
+
+    def get_findings_for_run(self, run_id: str) -> list[Finding]:
+        """查詢執行管線所屬之所有審查發現。"""
+        with self._conn() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT f.artifact_ref, r.case_id
+                FROM findings f
+                JOIN runs r ON f.run_id = r.run_id
+                WHERE f.run_id = ?
+                ORDER BY f.created_at ASC
+                """,
+                (run_id,),
+            )
+            rows = cursor.fetchall()
+        results: list[Finding] = []
+        for row in rows:
+            data = self.artifacts.get(case_id=row["case_id"], artifact_id=row["artifact_ref"])
+            results.append(Finding.model_validate_json(data))
+        return results
+
+    def list_rules(self, status: RuleStatus | None = None) -> list[Rule]:
+        """查詢所有規則定義。"""
+        with self._conn() as conn:
+            cursor = conn.cursor()
+            if status is not None:
+                cursor.execute(
+                    "SELECT rule_id, artifact_ref FROM rules WHERE status = ? ORDER BY created_at DESC",
+                    (status.value,),
+                )
+            else:
+                cursor.execute(
+                    "SELECT rule_id, artifact_ref FROM rules ORDER BY created_at DESC"
+                )
+            rows = cursor.fetchall()
+        results: list[Rule] = []
+        for row in rows:
+            data = self.artifacts.get(case_id=row["rule_id"], artifact_id=row["artifact_ref"])
+            results.append(Rule.model_validate_json(data))
+        return results
+
+    def list_sources(self) -> list[SourceReference]:
+        """查詢所有法規或內規來源參照。"""
+        with self._conn() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT source_id, artifact_ref FROM sources ORDER BY created_at DESC")
+            rows = cursor.fetchall()
+        results: list[SourceReference] = []
+        for row in rows:
+            data = self.artifacts.get(case_id=row["source_id"], artifact_id=row["artifact_ref"])
+            results.append(SourceReference.model_validate_json(data))
+        return results
+
 

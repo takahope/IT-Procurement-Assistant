@@ -1,0 +1,195 @@
+{% extends "base.html" %}
+
+{% block title %}審查進度與結果 - {{ review.title }}{% endblock %}
+
+{% block content %}
+<div class="case-nav">
+    <a href="/cases/{{ case_id }}/scope">1. 範疇與事實</a>
+    <a href="/cases/{{ case_id }}/documents">2. 文件與校正</a>
+    <a href="/cases/{{ case_id }}/masking">3. 機敏遮罩</a>
+    <a href="/cases/{{ case_id }}/egress">4. 出站預覽</a>
+    <a href="/cases/{{ case_id }}/review" class="active">5. 審查與決定</a>
+</div>
+
+<div class="card">
+    <div class="card-title">審查管線執行狀態</div>
+    {% if run %}
+        <p><strong>執行編號 (Run ID)：</strong><code>{{ run.run_id }}</code></p>
+        <p><strong>管線狀態：</strong>
+            <span class="badge {% if run.state.value == 'completed' %}badge-success{% elif run.state.value == 'running' %}badge-info{% else %}badge-warning{% endif %}">
+                {{ run.state.value }}
+            </span>
+            {% if run.stale %}
+                <span class="badge badge-danger">已失效 (Stale: {{ run.invalidation_reason or '規則異動' }})</span>
+            {% endif %}
+        </p>
+    {% else %}
+        <p style="color: var(--text-muted);">尚未執行任何審查管線。</p>
+    {% endif %}
+
+    <div style="margin-top: 1rem;">
+        <button id="start-review-btn">開始／重新執行審查管線</button>
+        <button id="export-masked-btn" class="btn btn-secondary">匯出遮罩報告 (Masked Export)</button>
+        <button id="export-pt-btn" class="btn btn-secondary">匯出明文報告 (Plaintext Export)</button>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-title">審查發現與條款對照 (共 {{ findings | length }} 項)</div>
+    {% if findings %}
+        {% for f in findings %}
+        <div style="margin-bottom: 1.5rem; border: 1px solid var(--border-color); border-radius: 4px; padding: 1rem; background-color: #ffffff;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                <div>
+                    <strong>發現事項 #{{ loop.index }} (要求: {{ f.requirement_id }})</strong>
+                    <span class="badge {% if f.risk.value == 'critical' or f.risk.value == 'high' %}badge-danger{% elif f.risk.value == 'medium' %}badge-warning{% else %}badge-info{% endif %}">
+                        風險: {{ f.risk.value }}
+                    </span>
+                    <span class="badge badge-info">結果: {{ f.result.value }}</span>
+                    <span class="badge badge-warning">人工狀態: {{ f.human_status }}</span>
+                </div>
+                <small style="color: var(--text-muted);">條款: {{ f.clause_ids | join(', ') if f.clause_ids else '全份合約' }}</small>
+            </div>
+
+            <!-- 原文 / 證據與理由 / 草稿修訂並列 (Side-by-side) -->
+            <div class="side-by-side">
+                <div class="side-panel">
+                    <div class="side-panel-header">【原合約條文】</div>
+                    <pre style="white-space: pre-wrap; font-family: inherit;">{{ f.original_text or '(未提供條文原文)' }}</pre>
+                </div>
+                <div class="side-panel">
+                    <div class="side-panel-header">【審查理由與證據】</div>
+                    <p>{{ f.rationale or f.reason or '查核未符合規範' }}</p>
+                </div>
+                <div class="side-panel">
+                    <div class="side-panel-header">【草稿建議修訂】</div>
+                    <p>{{ f.suggested_clause or f.proposed_action or f.suggested_action or '建議補強條款' }}</p>
+                </div>
+            </div>
+
+            <!-- 建議修改校驗與人工審查決定 -->
+            <div style="margin-top: 1rem; padding-top: 0.75rem; border-top: 1px dashed var(--border-color);">
+                <div style="margin-bottom: 0.5rem;">
+                    <label class="form-label">修改草稿文字</label>
+                    <textarea id="proposed-text-{{ f.finding_id }}" rows="2">{{ f.suggested_clause or f.original_text or '' }}</textarea>
+                </div>
+                <button type="button" class="btn btn-secondary validate-btn" data-fid="{{ f.finding_id }}">結構檢核校驗</button>
+                <button type="button" class="btn adopt-btn" data-fid="{{ f.finding_id }}" data-run="{{ run.run_id if run else '' }}">採納建議 (Adopt)</button>
+                <button type="button" class="btn btn-danger reject-btn" data-fid="{{ f.finding_id }}" data-run="{{ run.run_id if run else '' }}">拒絕／不採納 (Reject)</button>
+                <span id="val-result-{{ f.finding_id }}" style="margin-left: 0.5rem; font-size: 0.85rem;"></span>
+            </div>
+        </div>
+        {% endfor %}
+    {% else %}
+        <p style="color: var(--text-muted); padding: 1rem 0;">目前尚無審查發現事項，請點擊上方按鈕執行審查。</p>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('start-review-btn').addEventListener('click', async () => {
+    try {
+        const btn = document.getElementById('start-review-btn');
+        btn.disabled = true;
+        btn.textContent = '審查執行中...';
+        await apiRequest('/api/cases/{{ case_id }}/review/start', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({})
+        });
+        alert('審查執行完畢！');
+        window.location.reload();
+    } catch (err) {
+        alert('執行審查失敗: ' + err.message);
+        document.getElementById('start-review-btn').disabled = false;
+        document.getElementById('start-review-btn').textContent = '開始／重新執行審查管線';
+    }
+});
+
+// 結構檢核校驗
+document.querySelectorAll('.validate-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+        const fid = btn.getAttribute('data-fid');
+        const text = document.getElementById(`proposed-text-${fid}`).value;
+        const resEl = document.getElementById(`val-result-${fid}`);
+
+        try {
+            const res = await apiRequest('/api/cases/{{ case_id }}/review/validate-change', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    finding_id: fid,
+                    proposed_text: text
+                })
+            });
+            if (res.structure.ok) {
+                resEl.innerHTML = '<span class="badge badge-success">結構檢核通過</span>';
+            } else {
+                resEl.innerHTML = `<span class="badge badge-danger">結構違規: ${res.issues.join('; ')}</span>`;
+            }
+        } catch (err) {
+            alert('校驗失敗: ' + err.message);
+        }
+    });
+});
+
+// 採納或拒絕決定
+document.querySelectorAll('.adopt-btn, .reject-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+        const fid = btn.getAttribute('data-fid');
+        const runId = btn.getAttribute('data-run');
+        const isAdopt = btn.classList.contains('adopt-btn');
+        const text = document.getElementById(`proposed-text-${fid}`).value;
+
+        try {
+            await apiRequest('/api/cases/{{ case_id }}/review/decision', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    finding_id: fid,
+                    run_id: runId,
+                    status: isAdopt ? 'accepted' : 'rejected',
+                    modified_clause_text: text,
+                    note: isAdopt ? '法務主管採納建議' : '不符需求駁回'
+                })
+            });
+            alert('人工審查決定已記錄！');
+            window.location.reload();
+        } catch (err) {
+            alert('記錄決定失敗: ' + err.message);
+        }
+    });
+});
+
+// 匯出處理
+document.getElementById('export-masked-btn').addEventListener('click', async () => {
+    try {
+        const res = await apiRequest('/api/cases/{{ case_id }}/export', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ mode: 'masked', confirmed: false })
+        });
+        window.location.href = `/api/cases/{{ case_id }}/export/download?file=${res.filename}`;
+    } catch (err) {
+        alert('匯出失敗: ' + err.message);
+    }
+});
+
+document.getElementById('export-pt-btn').addEventListener('click', async () => {
+    const ok = confirm('匯出明文報告將還原機敏遮罩詞彙，本機權限設為 0600。是否確定已完成人工覆核？');
+    if (!ok) return;
+
+    try {
+        const res = await apiRequest('/api/cases/{{ case_id }}/export', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ mode: 'plaintext', confirmed: true })
+        });
+        window.location.href = `/api/cases/{{ case_id }}/export/download?file=${res.filename}`;
+    } catch (err) {
+        alert('明文匯出失敗: ' + err.message);
+    }
+});
+</script>
+{% endblock %}

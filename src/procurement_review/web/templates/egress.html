@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+
+{% block title %}出站預覽與核准 - {{ review.title }}{% endblock %}
+
+{% block content %}
+<div class="case-nav">
+    <a href="/cases/{{ case_id }}/scope">1. 範疇與事實</a>
+    <a href="/cases/{{ case_id }}/documents">2. 文件與校正</a>
+    <a href="/cases/{{ case_id }}/masking">3. 機敏遮罩</a>
+    <a href="/cases/{{ case_id }}/egress" class="active">4. 出站預覽</a>
+    <a href="/cases/{{ case_id }}/review">5. 審查與決定</a>
+</div>
+
+<div class="card">
+    <div class="card-title">出站請求不可變預覽 (Prepared Egress Request)</div>
+    <div id="egress-details">
+        <p>載入出站草稿中...</p>
+    </div>
+    <div style="margin-top: 1rem;">
+        <button id="approve-btn" class="btn" style="display: none;">核准出站請求 (Approve Egress)</button>
+        <button id="dispatch-btn" class="btn btn-secondary" style="display: none;">發送分派傳輸 (Dispatch)</button>
+        <a href="/cases/{{ case_id }}/review" class="btn">下一步：執行審查</a>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let _requestId = '';
+let _approvalId = '';
+
+window.addEventListener('DOMContentLoaded', async () => {
+    try {
+        const draft = await apiRequest('/api/cases/{{ case_id }}/egress/draft');
+        _requestId = draft.request_id;
+
+        const container = document.getElementById('egress-details');
+        container.innerHTML = `
+            <p><strong>請求 ID：</strong><code>${draft.request_id}</code></p>
+            <p><strong>目標端點：</strong><code>${draft.endpoint}</code></p>
+            <p><strong>目標模型：</strong><code>${draft.model}</code></p>
+            <p><strong>全量 SHA-256 摘要：</strong><code>${draft.sha256}</code></p>
+            <div style="margin-top: 1rem; padding: 0.75rem; background-color: #f1f5f9; border-radius: 4px;">
+                <p style="font-size: 0.85rem; color: var(--text-muted);">
+                    此出站請求已完成機敏遮罩並計算不可變雜湊。未經本機操作者正式核准前，嚴格執行零傳輸（Zero Network Egress）。
+                </p>
+            </div>
+        `;
+
+        document.getElementById('approve-btn').style.display = 'inline-block';
+    } catch (err) {
+        document.getElementById('egress-details').innerHTML = `<p style="color: var(--danger-color);">無法載入出站草稿: ${err.message}</p>`;
+    }
+});
+
+document.getElementById('approve-btn').addEventListener('click', async () => {
+    if (!_requestId) return;
+    try {
+        const res = await apiRequest('/api/cases/{{ case_id }}/egress/approve', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ request_id: _requestId })
+        });
+        _approvalId = res.approval_id;
+        alert(`已核准出站！核准編號: ${res.approval_id}`);
+        document.getElementById('approve-btn').disabled = true;
+        document.getElementById('approve-btn').textContent = '已核准 (Approved)';
+        document.getElementById('dispatch-btn').style.display = 'inline-block';
+    } catch (err) {
+        alert('核准失敗: ' + err.message);
+    }
+});
+
+document.getElementById('dispatch-btn').addEventListener('click', async () => {
+    if (!_requestId || !_approvalId) return;
+    try {
+        await apiRequest('/api/cases/{{ case_id }}/egress/dispatch', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ request_id: _requestId, approval_id: _approvalId })
+        });
+        alert('出站傳輸已完成！');
+        window.location.href = '/cases/{{ case_id }}/review';
+    } catch (err) {
+        alert('傳輸失敗: ' + err.message);
+    }
+});
+</script>
+{% endblock %}

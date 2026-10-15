@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+
+{% block title %}系統環境設定 - 採購合約資安審查助手{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-title">執行期安全政策 (Runtime Policy)</div>
+    <table>
+        <tbody>
+            <tr>
+                <th style="width: 250px;">執行期模式 (Mode)</th>
+                <td>
+                    <span class="badge {% if policy.mode.value == 'production' %}badge-danger{% else %}badge-info{% endif %}">
+                        {{ policy.mode.value }}
+                    </span>
+                    <small style="color: var(--text-muted); margin-left: 0.5rem;">
+                        {% if policy.mode.value == 'synthetic' %}
+                            合成測試模式：使用 Mock 供應商與假金鑰庫，禁止連線外部 API。
+                        {% else %}
+                            正式生產模式：受限 HTTPS 出站，強制金鑰安全落盤。
+                        {% endif %}
+                    </small>
+                </td>
+            </tr>
+            <tr>
+                <th>資料庫與受控庫路徑</th>
+                <td><code>{{ policy.data_root }}</code></td>
+            </tr>
+            <tr>
+                <th>機敏產物保存期限 (Retention)</th>
+                <td>預設 30 天 (過期自動加入刪除清單)</td>
+            </tr>
+            <tr>
+                <th>Loopback 限制</th>
+                <td><span class="badge badge-success">強制啟用 (嚴禁外部主機綁定與跨站請求)</span></td>
+            </tr>
+            <tr>
+                <th>內容安全政策 (CSP)</th>
+                <td><span class="badge badge-success">Strict (禁止所有外部 CDN 腳本與圖片)</span></td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+<div class="card">
+    <div class="card-title">模型供應商連線資訊 (Provider Config)</div>
+    <table>
+        <thead>
+            <tr>
+                <th>供應商名稱</th>
+                <th>HTTPS 端點位址</th>
+                <th>預設模型名稱</th>
+                <th>金鑰狀態</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><strong>Mock Provider (測試)</strong></td>
+                <td><code>https://mock.provider.local/v1/chat/completions</code></td>
+                <td><code>mock-legal-v1</code></td>
+                <td><span class="badge badge-success">內建模擬金鑰</span></td>
+            </tr>
+            <tr>
+                <td><strong>OpenAI Compatible</strong></td>
+                <td><code>https://api.openai.com/v1/chat/completions</code></td>
+                <td><code>gpt-4o</code></td>
+                <td><span class="badge badge-warning">依系統環境設定</span></td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+{% endblock %}

@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+
+{% block title %}案件範疇與事實 - {{ review.title }}{% endblock %}
+
+{% block content %}
+<div class="case-nav">
+    <a href="/cases/{{ case_id }}/scope" class="active">1. 範疇與事實</a>
+    <a href="/cases/{{ case_id }}/documents">2. 文件與校正</a>
+    <a href="/cases/{{ case_id }}/masking">3. 機敏遮罩</a>
+    <a href="/cases/{{ case_id }}/egress">4. 出站預覽</a>
+    <a href="/cases/{{ case_id }}/review">5. 審查與決定</a>
+</div>
+
+<div class="card">
+    <div class="card-title">案件基本資訊：{{ review.title }}</div>
+    <p><strong>案件編號：</strong>{{ review.case_id }}</p>
+    <p><strong>採購類別：</strong><span class="badge badge-info">{{ review.contract_type.value }}</span></p>
+    <p><strong>目前版本：</strong>Revision {{ review.revision }}</p>
+</div>
+
+<div class="card">
+    <div class="card-title">審查事實設定 (Case Facts)</div>
+    <form id="scope-form">
+        <div class="form-group">
+            <label class="form-label">採購機關／單位</label>
+            <input type="text" id="unit" value="{{ review.facts.procurement_unit }}" required>
+        </div>
+        <div class="form-group">
+            <label class="form-label">審查基準日 (Review Baseline Date)</label>
+            <input type="date" id="baseline-date" value="{{ review.facts.review_baseline_date }}" required>
+        </div>
+        <div class="form-group">
+            <label class="form-label">委外服務範圍與工作說明</label>
+            <textarea id="service-scope" rows="3">{{ review.facts.service_scope or '' }}</textarea>
+        </div>
+        <div class="form-group">
+            <label class="form-label">是否涉及個人資料處理</label>
+            <select id="personal-data">
+                <option value="true" {% if review.facts.personal_data_involved %}selected{% endif %}>是 (True)</option>
+                <option value="false" {% if not review.facts.personal_data_involved %}selected{% endif %}>否 (False)</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label class="form-label">是否涉及機敏或機密業務資料</label>
+            <select id="sensitive-data">
+                <option value="true" {% if review.facts.sensitive_data_involved %}selected{% endif %}>是 (True)</option>
+                <option value="false" {% if not review.facts.sensitive_data_involved %}selected{% endif %}>否 (False)</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label class="form-label">未明或待確認欄位 (Unknown Fields, 逗號分隔)</label>
+            <input type="text" id="unknown-fields" value="{{ review.facts.unknown_fields | join(', ') }}">
+        </div>
+        <button type="submit">儲存事實更新</button>
+        <a href="/cases/{{ case_id }}/documents" class="btn btn-secondary">下一步：上傳文件</a>
+    </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('scope-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const unit = document.getElementById('unit').value.trim();
+    const date = document.getElementById('baseline-date').value;
+    const scope = document.getElementById('service-scope').value.trim();
+    const personal = document.getElementById('personal-data').value === 'true';
+    const sensitive = document.getElementById('sensitive-data').value === 'true';
+    const unknowns = document.getElementById('unknown-fields').value.split(',').map(s => s.trim()).filter(Boolean);
+
+    try {
+        await apiRequest('/api/cases/{{ case_id }}/facts', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                procurement_unit: unit,
+                review_baseline_date: date,
+                service_scope: scope,
+                personal_data_involved: personal,
+                sensitive_data_involved: sensitive,
+                unknown_fields: unknowns,
+                procurement_families: ["{{ review.contract_type.value }}"]
+            })
+        });
+        alert('事實已更新！');
+        _isFormDirty = false;
+        window.location.reload();
+    } catch (err) {
+        alert('更新失敗: ' + err.message);
+    }
+});
+</script>
+{% endblock %}

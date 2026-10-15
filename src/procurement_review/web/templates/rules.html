@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+
+{% block title %}規則與法源治理 - 採購合約資安審查助手{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-title">法規與內規來源清單 (Sources, 共 {{ sources | length }} 項)</div>
+    {% if sources %}
+    <table>
+        <thead>
+            <tr>
+                <th>來源標題</th>
+                <th>發布機關</th>
+                <th>版本</th>
+                <th>查核狀態</th>
+                <th>SHA-256 雜湊</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for s in sources %}
+            <tr>
+                <td><strong>{{ s.title }}</strong><br><small style="color: var(--text-muted);">{{ s.source_id }}</small></td>
+                <td>{{ s.issuer }}</td>
+                <td>{{ s.version }}</td>
+                <td>
+                    {% if s.verified_at and s.verified_by %}
+                        <span class="badge badge-success">已查核 ({{ s.verified_by }})</span>
+                    {% else %}
+                        <span class="badge badge-warning">未查核 (Unverified)</span>
+                    {% endif %}
+                </td>
+                <td><code>{{ s.content_hash[:16] }}...</code></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p style="color: var(--text-muted); padding: 1rem 0;">目前無註冊法規來源。</p>
+    {% endif %}
+</div>
+
+<div class="card">
+    <div class="card-title">資安審查規則清單 (Rules, 共 {{ rules | length }} 條)</div>
+    {% if rules %}
+    <table>
+        <thead>
+            <tr>
+                <th>規則 ID / 標題</th>
+                <th>適用類別</th>
+                <th>要求內文 (與法源對照)</th>
+                <th>強制性 / 風險</th>
+                <th>治理狀態</th>
+                <th>操作</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for r in rules %}
+            <tr>
+                <td>
+                    <strong>{{ r.title }}</strong><br>
+                    <small><code>{{ r.rule_id }} (v{{ r.version }})</code></small>
+                </td>
+                <td><span class="badge badge-info">{{ r.category.value }}</span></td>
+                <td>
+                    <div style="font-size: 0.85rem;">
+                        <strong>【要求內文】:</strong> {{ r.requirement_text }}<br>
+                        <strong>【引用法源】:</strong>
+                        {% for ref in r.source_refs %}
+                            <code>{{ ref.id }}</code>
+                        {% else %}
+                            <span style="color: var(--text-muted);">(無關聯法源)</span>
+                        {% endfor %}
+                    </div>
+                </td>
+                <td>
+                    <span class="badge {% if r.mandatory %}badge-danger{% else %}badge-info{% endif %}">
+                        {{ '強制' if r.mandatory else '建議' }}
+                    </span>
+                    <span class="badge badge-warning">{{ r.severity.value }}</span>
+                </td>
+                <td>
+                    {% if r.status.value == 'active' %}
+                        <span class="badge badge-success">生效中 (Active)</span>
+                        {% if r.approved_by %}
+                            <br><small style="color: var(--text-muted);">核准人: {{ r.approved_by }}</small>
+                        {% endif %}
+                    {% elif r.status.value == 'pending_approval' %}
+                        <span class="badge badge-warning">待核准 (Pending)</span>
+                    {% elif r.status.value == 'revoked' %}
+                        <span class="badge badge-danger">已撤銷 (Revoked)</span>
+                    {% else %}
+                        <span class="badge badge-secondary">{{ r.status.value }}</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if r.status.value == 'pending_approval' %}
+                        <button class="btn release-btn" data-rule="{{ r.rule_id }}" data-ver="{{ r.version }}">核准發布</button>
+                    {% elif r.status.value == 'active' %}
+                        <button class="btn btn-danger revoke-btn" data-rule="{{ r.rule_id }}" data-ver="{{ r.version }}">撤銷規則</button>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p style="color: var(--text-muted); padding: 1rem 0;">目前無註冊規則。</p>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.querySelectorAll('.revoke-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+        const ruleId = btn.getAttribute('data-rule');
+        const ver = btn.getAttribute('data-ver');
+        const reason = prompt(`請輸入撤銷規則 ${ruleId} 的理由：`, '法規條文廢止修訂');
+        if (!reason) return;
+
+        try {
+            const res = await apiRequest(`/api/rules/${ruleId}/revoke`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ version: ver, reason: reason })
+            });
+            alert(`規則已撤銷！已使 ${res.invalidated_runs.length} 個作用中審查管線 (Runs) 失效 (Stale)。`);
+            window.location.reload();
+        } catch (err) {
+            alert('撤銷失敗: ' + err.message);
+        }
+    });
+});
+</script>
+{% endblock %}

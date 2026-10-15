@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+
+{% block title %}案件總覽 - 採購合約資安審查助手{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-title">建立新審查案件</div>
+    <form id="create-case-form">
+        <div class="form-group">
+            <label class="form-label">案件名稱</label>
+            <input type="text" id="case-title" placeholder="例如：中研院雲端伺服器維護勞務採購合約" required>
+        </div>
+        <div class="form-group">
+            <label class="form-label">採購類別</label>
+            <select id="case-type">
+                <option value="services">勞務採購 (services)</option>
+                <option value="goods">財物採購 (goods)</option>
+                <option value="custom_software">專案軟體開發 (custom_software)</option>
+                <option value="saas">雲端服務 SaaS (saas)</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label class="form-label">採購單位</label>
+            <input type="text" id="procurement-unit" value="中央研究院資訊科學研究所" required>
+        </div>
+        <button type="submit">建立案件</button>
+    </form>
+</div>
+
+<div class="card">
+    <div class="card-title">審查案件清單 (共 {{ reviews | length }} 件)</div>
+    {% if reviews %}
+    <table>
+        <thead>
+            <tr>
+                <th>案件名稱</th>
+                <th>採購類別</th>
+                <th>審查狀態</th>
+                <th>建立時間</th>
+                <th>操作</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for r in reviews %}
+            <tr>
+                <td><strong>{{ r.title }}</strong><br><small style="color: var(--text-muted);">{{ r.case_id }}</small></td>
+                <td><span class="badge badge-info">{{ r.contract_type.value }}</span></td>
+                <td>
+                    <span class="badge badge-success">{{ r.state.value }}</span>
+                </td>
+                <td>{{ r.created_at.strftime('%Y-%m-%d %H:%M') if r.created_at else '-' }}</td>
+                <td>
+                    <a href="/cases/{{ r.case_id }}/scope" class="btn btn-secondary">範疇</a>
+                    <a href="/cases/{{ r.case_id }}/documents" class="btn btn-secondary">文件</a>
+                    <a href="/cases/{{ r.case_id }}/masking" class="btn btn-secondary">遮罩</a>
+                    <a href="/cases/{{ r.case_id }}/egress" class="btn btn-secondary">出站</a>
+                    <a href="/cases/{{ r.case_id }}/review" class="btn">審查</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p style="color: var(--text-muted); padding: 1rem 0;">目前無審查案件，請使用上方表單建立新案件。</p>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('create-case-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const title = document.getElementById('case-title').value.trim();
+    const contract_type = document.getElementById('case-type').value;
+    const procurement_unit = document.getElementById('procurement-unit').value.trim();
+
+    try {
+        const res = await apiRequest('/api/cases', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                title: title,
+                contract_type: contract_type,
+                facts: {
+                    procurement_unit: procurement_unit,
+                    procurement_families: [contract_type]
+                }
+            })
+        });
+        window.location.href = `/cases/${res.case_id}/scope`;
+    } catch (err) {
+        alert('建立案件失敗: ' + err.message);
+    }
+});
+</script>
+{% endblock %}

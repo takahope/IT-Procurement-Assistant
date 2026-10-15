@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+
+{% block title %}機敏資訊偵測與遮罩 - {{ review.title }}{% endblock %}
+
+{% block content %}
+<div class="case-nav">
+    <a href="/cases/{{ case_id }}/scope">1. 範疇與事實</a>
+    <a href="/cases/{{ case_id }}/documents">2. 文件與校正</a>
+    <a href="/cases/{{ case_id }}/masking" class="active">3. 機敏遮罩</a>
+    <a href="/cases/{{ case_id }}/egress">4. 出站預覽</a>
+    <a href="/cases/{{ case_id }}/review">5. 審查與決定</a>
+</div>
+
+<div class="card">
+    <div class="card-title">遮罩安全狀態</div>
+    {% if masking %}
+        <p><strong>會話編號：</strong>{{ masking.session_id }}</p>
+        <p><strong>偵測器版本：</strong>{{ masking.detector_version }}</p>
+        <p><strong>出站摘要雜湊：</strong><code>{{ masking.outbound_hash }}</code></p>
+        <p><strong>往返還原驗證：</strong>
+            {% if masking.roundtrip_ok %}
+                <span class="badge badge-success">通過 (Roundtrip OK)</span>
+            {% else %}
+                <span class="badge badge-warning">待覆核</span>
+            {% endif %}
+        </p>
+
+        {% if masking.blocking_reasons %}
+        <div style="margin: 1rem 0; padding: 0.75rem; background-color: #fee2e2; border: 1px solid #f87171; border-radius: 4px;">
+            <strong style="color: var(--danger-color);">出站阻擋警示 (Blocking Reasons)：</strong>
+            <ul>
+                {% for r in masking.blocking_reasons %}
+                <li><span class="badge badge-danger">{{ r }}</span> 出站已受阻擋，必須完成遮罩或修正。</li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+    {% else %}
+        <p style="color: var(--text-muted);">尚未建立遮罩會話，請先完成文件上傳。</p>
+    {% endif %}
+</div>
+
+<div class="card">
+    <div class="card-title">手動補標記與補遮 (Manual Annotation)</div>
+    <form id="annotate-form">
+        <div class="form-group">
+            <label class="form-label">實體類型 (Entity Type)</label>
+            <select id="entity-type">
+                <option value="ORG">機關／組織名稱 (ORG)</option>
+                <option value="PERSON">人名 (PERSON)</option>
+                <option value="ID_NUMBER">身分證字號 / 統編 (ID_NUMBER)</option>
+                <option value="EMAIL">電子郵件 (EMAIL)</option>
+                <option value="SECRET">通關金鑰 / 密碼 (SECRET)</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label class="form-label">欲遮罩之敏感字串原文</label>
+            <input type="text" id="orig-text" placeholder="例如：中央研究院資訊科學研究所" required>
+        </div>
+        <button type="submit">套用自訂遮罩標記</button>
+        <a href="/cases/{{ case_id }}/egress" class="btn btn-secondary">下一步：出站預覽與核准</a>
+    </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('annotate-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const entity_type = document.getElementById('entity-type').value;
+    const text = document.getElementById('orig-text').value.trim();
+
+    try {
+        await apiRequest('/api/cases/{{ case_id }}/masking/annotate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                annotations: [{
+                    entity_type: entity_type,
+                    original_text: text,
+                    start: 0,
+                    end: text.length
+                }]
+            })
+        });
+        alert('補遮標記已套用！');
+        _isFormDirty = false;
+        window.location.reload();
+    } catch (err) {
+        alert('標記失敗: ' + err.message);
+    }
+});
+</script>
+{% endblock %}
