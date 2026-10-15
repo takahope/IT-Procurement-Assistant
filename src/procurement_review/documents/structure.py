@@ -12,12 +12,6 @@ from procurement_review.domain.models import (
     StrictBaseModel,
 )
 
-# Ensure SourceSpan has .start and .end properties pointing to Unicode code point offsets
-if not hasattr(DomainSourceSpan, "start"):
-    DomainSourceSpan.start = property(lambda self: self.start_offset)  # type: ignore[attr-defined]
-if not hasattr(DomainSourceSpan, "end"):
-    DomainSourceSpan.end = property(lambda self: self.end_offset)  # type: ignore[attr-defined]
-
 SourceSpan = DomainSourceSpan
 
 

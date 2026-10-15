@@ -174,6 +174,12 @@ def confirm_text(
     將人工校正後的文字更新至區塊，生成具備確認參照 (confirmation_ref) 之全新不可變 Snapshot。
     更新歷程與操作者記錄於 manifest 中。
     """
+    existing_block_ids = {b.block_id for b in snapshot.blocks}
+    for item in corrected_blocks:
+        bid = item.get("block_id")
+        if bid not in existing_block_ids:
+            raise DomainError("BLOCK_NOT_FOUND", f"欲更正之區塊不存在於文件中: {bid}")
+
     corrected_map = {item["block_id"]: item["raw_text"] for item in corrected_blocks}
     updated_blocks: list[DocumentBlock] = []
 

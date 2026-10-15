@@ -1,6 +1,8 @@
 import uuid
+import zipfile
 from pathlib import Path
 
+import docx
 import pytest
 
 from procurement_review.documents.ingest import confirm_text, ingest, segment
@@ -264,3 +266,87 @@ def test_segment_identifies_clauses_and_spans(
             assert isinstance(span, SourceSpan)
             assert span.start >= 0
             assert span.end > span.start
+
+
+def test_ingest_xml_entity_expansion_fails_cleanly(
+    artifact_store: ArtifactStore, runtime_policy: RuntimePolicy, sample_review_id: str, tmp_path: Path
+):
+    malicious_docx = tmp_path / "xxe_payload.docx"
+    payload = b"""<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE test [
+  <!ENTITY xxe "evil content">
+  <!ELEMENT test (#PCDATA)>
+]>
+<test>&xxe;</test>"""
+    with zipfile.ZipFile(malicious_docx, "w") as zf:
+        zf.writestr("[Content_Types].xml", payload)
+        zf.writestr("word/document.xml", payload)
+
+    with pytest.raises(DomainError) as exc_info:
+        ingest(malicious_docx, sample_review_id, runtime_policy, artifact_store)
+    assert exc_info.value.code == "CORRUPT_DOCUMENT"
+    assert "XML security check or parse failed" in exc_info.value.safe_message
+
+
+def test_ingest_preserves_paragraph_and_table_natural_order(
+    artifact_store: ArtifactStore, runtime_policy: RuntimePolicy, sample_review_id: str, tmp_path: Path
+):
+    doc_path = tmp_path / "ordered_doc.docx"
+    doc = docx.Document()
+    doc.add_paragraph("第一條 採購標的")
+    tbl = doc.add_table(rows=1, cols=1)
+    tbl.rows[0].cells[0].text = "伺服器主機 10 臺"
+    doc.add_paragraph("第二條 履約期限")
+    doc.save(str(doc_path))
+
+    snapshot = ingest(doc_path, sample_review_id, runtime_policy, artifact_store)
+
+    body_blocks = [b for b in snapshot.blocks if b.block_type in ("paragraph", "table_cell")]
+    assert len(body_blocks) == 3
+    assert body_blocks[0].block_type == "paragraph"
+    assert "第一條 採購標的" in body_blocks[0].raw_text
+    assert body_blocks[1].block_type == "table_cell"
+    assert "伺服器主機 10 臺" in body_blocks[1].raw_text
+    assert body_blocks[2].block_type == "paragraph"
+    assert "第二條 履約期限" in body_blocks[2].raw_text
+
+    # Verify segmentation keeps the table cell grouped under Clause 1
+    segmented = segment(snapshot)
+    assert len(segmented.clauses) == 2
+    assert segmented.clauses[0].clause_number == "第一條"
+    assert "伺服器主機 10 臺" in segmented.clauses[0].text
+    assert segmented.clauses[1].clause_number == "第二條"
+
+
+def test_ingest_textbox_content_not_duplicated_in_paragraph(
+    artifact_store: ArtifactStore, runtime_policy: RuntimePolicy, sample_review_id: str
+):
+    doc_path = FIXTURES_DIR / "textbox.docx"
+    snapshot = ingest(doc_path, sample_review_id, runtime_policy, artifact_store)
+
+    paragraph_blocks = [b for b in snapshot.blocks if b.block_type == "paragraph"]
+    textbox_blocks = [b for b in snapshot.blocks if b.block_type == "textbox"]
+
+    assert len(paragraph_blocks) >= 1
+    assert len(textbox_blocks) >= 1
+
+    # Textbox content must only be in textbox block and not duplicated in paragraph
+    assert "備註：所有交付項目須經資安審查。" in textbox_blocks[0].raw_text
+    assert "備註：所有交付項目須經資安審查。" not in paragraph_blocks[0].raw_text
+    assert paragraph_blocks[0].raw_text == "第四條 交付項目"
+
+
+def test_confirm_text_unknown_block_id_raises_domain_error(
+    artifact_store: ArtifactStore, runtime_policy: RuntimePolicy, sample_review_id: str
+):
+    doc_path = FIXTURES_DIR / "normal.docx"
+    snapshot = ingest(doc_path, sample_review_id, runtime_policy, artifact_store)
+
+    non_existent_id = str(uuid.uuid4())
+    corrected_blocks = [
+        {"block_id": non_existent_id, "raw_text": "不存在的區塊更正"}
+    ]
+
+    with pytest.raises(DomainError) as exc_info:
+        confirm_text(snapshot, corrected_blocks, actor="auditor@sinica.edu.tw")
+    assert exc_info.value.code == "BLOCK_NOT_FOUND"

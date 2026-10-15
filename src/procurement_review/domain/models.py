@@ -197,6 +197,14 @@ class SourceSpan(StrictBaseModel):
     page_number: int | None = None
     structural_path: str = ""
 
+    @property
+    def start(self) -> int:
+        return self.start_offset
+
+    @property
+    def end(self) -> int:
+        return self.end_offset
+
 
 class DocumentSnapshot(StrictBaseModel):
     """不可變文件文字與結構快照"""

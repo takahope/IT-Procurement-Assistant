@@ -3,9 +3,12 @@ import zipfile
 from pathlib import Path
 from typing import Any
 
+import defusedxml.ElementTree as DefusedET
 import docx
+from defusedxml.common import DefusedXmlException
 from docx.oxml.ns import nsmap
 from docx.table import Table
+from docx.text.paragraph import Paragraph
 
 from procurement_review.documents.structure import DocumentBlock, QualityIssue
 from procurement_review.domain.errors import DomainError
@@ -46,6 +49,16 @@ def _validate_docx_zip(path: Path) -> None:
                             "ZIP_BOMB_DETECTED",
                             f"壓縮比率 ({ratio:.1f}) 超過安全臨界值 ({MAX_COMPRESSION_RATIO})",
                         )
+
+                # XML 安全檢查：掃描所有 .xml 與 .rels 檔案，防範實體膨脹與 XXE 攻擊
+                if info.filename.endswith(".xml") or info.filename.endswith(".rels"):
+                    data = zf.read(info)
+                    try:
+                        DefusedET.fromstring(data)
+                    except (DefusedXmlException, DefusedET.ParseError) as e:
+                        raise DomainError(
+                            "CORRUPT_DOCUMENT", "XML security check or parse failed"
+                        ) from e
     except zipfile.BadZipFile as e:
         raise DomainError("CORRUPT_DOCUMENT", f"無效或已損毀之 ZIP/DOCX 檔案: {e}") from e
 
@@ -78,14 +91,11 @@ def _extract_paragraph_text_and_issues(
             )
         )
 
-    # 提取完整文字（包含 ins 內之文字節點，但排除 delText）
-    text_pieces: list[str] = []
-    for node in p._p.iter():
-        tag = node.tag
-        # 只保留常規文字 <w:t>，不將已刪除之 <w:delText> 併入
-        if tag.endswith("}t") and not tag.endswith("}delText"):
-            text_pieces.append(node.text or "")
-
+    # 提取完整文字（包含 ins 內之文字節點，排除 delText 與文字方塊 w:txbxContent 內之文字）
+    text_pieces: list[str] = [
+        t.text or ""
+        for t in p._p.xpath(".//w:t[not(ancestor::w:txbxContent)]")
+    ]
     raw_text = "".join(text_pieces)
     return raw_text, issues
 
@@ -151,65 +161,77 @@ def read_docx(path: Path) -> tuple[list[DocumentBlock], list[QualityIssue]]:
                     )
                     issues.extend(p_issues)
 
-    # 2. 本文段落與文字方塊
-    for p_idx, p in enumerate(doc.paragraphs):
-        b_id = str(uuid.uuid4())
-        structural_path = f"body/p[{p_idx}]"
-        text, p_issues = _extract_paragraph_text_and_issues(p, b_id, structural_path)
-        if text.strip() or p_issues:
-            blocks.append(
-                DocumentBlock(
-                    block_id=b_id,
-                    block_type="paragraph",
-                    raw_text=text,
-                    structural_path=structural_path,
-                )
-            )
-            issues.extend(p_issues)
+    # 2. 本文內容（依文件自然順序處理段落、文字方塊與表格）
+    if hasattr(doc, "iter_inner_content"):
+        content_items = list(doc.iter_inner_content())
+    else:
+        content_items = []
+        for child in doc.element.body:
+            if child.tag.endswith("}p"):
+                content_items.append(Paragraph(child, doc))
+            elif child.tag.endswith("}tbl"):
+                content_items.append(Table(child, doc))
 
-        # 檢測段落內的文字方塊 (w:txbxContent)
-        txbx_elements = p._p.xpath(".//w:txbxContent")
-        for t_idx, txbx in enumerate(txbx_elements):
-            for tp_idx, tp in enumerate(txbx.xpath(".//w:p", namespaces=nsmap)):
-                tb_id = str(uuid.uuid4())
-                tb_path = f"body/p[{p_idx}]/textbox[{t_idx}]/p[{tp_idx}]"
-                tb_text = "".join(tp.xpath(".//w:t/text()"))
-                if tb_text.strip():
-                    blocks.append(
-                        DocumentBlock(
-                            block_id=tb_id,
-                            block_type="textbox",
-                            raw_text=tb_text,
-                            structural_path=tb_path,
-                        )
-                    )
-                    issues.append(
-                        QualityIssue(
-                            code="TEXTBOX_CONTENT",
-                            block_id=tb_id,
-                            safe_message=f"文字方塊內容提取於路徑 {tb_path}",
-                        )
-                    )
-
-    # 3. 表格 (Table)
-    for t_idx, table in enumerate(doc.tables):
-        if not isinstance(table, Table):
-            continue
-        for r_idx, row in enumerate(table.rows):
-            for c_idx, cell in enumerate(row.cells):
-                cell_text = cell.text.strip()
-                if not cell_text:
-                    continue
-                cb_id = str(uuid.uuid4())
-                structural_path = f"table[{t_idx}]/row[{r_idx}]/col[{c_idx}]"
+    p_idx = 0
+    t_idx = 0
+    for item in content_items:
+        if isinstance(item, Paragraph):
+            b_id = str(uuid.uuid4())
+            structural_path = f"body/p[{p_idx}]"
+            text, p_issues = _extract_paragraph_text_and_issues(item, b_id, structural_path)
+            if text.strip() or p_issues:
                 blocks.append(
                     DocumentBlock(
-                        block_id=cb_id,
-                        block_type="table_cell",
-                        raw_text=cell_text,
+                        block_id=b_id,
+                        block_type="paragraph",
+                        raw_text=text,
                         structural_path=structural_path,
-                        properties={"table": t_idx, "row": r_idx, "col": c_idx},
                     )
                 )
+                issues.extend(p_issues)
+
+            # 檢測段落內的文字方塊 (w:txbxContent)
+            txbx_elements = item._p.xpath(".//w:txbxContent")
+            for tb_sub_idx, txbx in enumerate(txbx_elements):
+                for tp_idx, tp in enumerate(txbx.xpath(".//w:p", namespaces=nsmap)):
+                    tb_id = str(uuid.uuid4())
+                    tb_path = f"body/p[{p_idx}]/textbox[{tb_sub_idx}]/p[{tp_idx}]"
+                    tb_text = "".join(tp.xpath(".//w:t/text()"))
+                    if tb_text.strip():
+                        blocks.append(
+                            DocumentBlock(
+                                block_id=tb_id,
+                                block_type="textbox",
+                                raw_text=tb_text,
+                                structural_path=tb_path,
+                            )
+                        )
+                        issues.append(
+                            QualityIssue(
+                                code="TEXTBOX_CONTENT",
+                                block_id=tb_id,
+                                safe_message=f"文字方塊內容提取於路徑 {tb_path}",
+                            )
+                        )
+            p_idx += 1
+
+        elif isinstance(item, Table):
+            for r_idx, row in enumerate(item.rows):
+                for c_idx, cell in enumerate(row.cells):
+                    cell_text = cell.text.strip()
+                    if not cell_text:
+                        continue
+                    cb_id = str(uuid.uuid4())
+                    structural_path = f"table[{t_idx}]/row[{r_idx}]/col[{c_idx}]"
+                    blocks.append(
+                        DocumentBlock(
+                            block_id=cb_id,
+                            block_type="table_cell",
+                            raw_text=cell_text,
+                            structural_path=structural_path,
+                            properties={"table": t_idx, "row": r_idx, "col": c_idx},
+                        )
+                    )
+            t_idx += 1
 
     return blocks, issues
