@@ -18,11 +18,13 @@ def _probe_filesystem_permissions(path: Path) -> bool:
             return False
 
         probe_file = path / ".probe_perm"
-        probe_file.write_bytes(b"probe")
-        os.chmod(probe_file, 0o600)
-        fst = probe_file.stat().st_mode & 0o777
-        probe_file.unlink(missing_ok=True)
-        return fst == 0o600
+        try:
+            probe_file.write_bytes(b"probe")
+            os.chmod(probe_file, 0o600)
+            fst = probe_file.stat().st_mode & 0o777
+            return fst == 0o600
+        finally:
+            probe_file.unlink(missing_ok=True)
     except (OSError, RuntimeError):
         return False
 

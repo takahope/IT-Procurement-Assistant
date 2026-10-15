@@ -194,3 +194,66 @@ def test_secret_store_interface():
     with pytest.raises(DomainError) as excinfo:
         fake.get_or_create_key("nonexistent_key", allow_create=False)
     assert excinfo.value.code == "KEY_UNAVAILABLE"
+
+
+def test_symlink_prefix_collision_rejected(tmp_path: Path):
+    """驗證指向與 root 具相同字串前綴 (如 /tmp/vault_attacker) 的 symlink 必須被拒絕。"""
+    secrets = FakeSecretStore()
+    vault_root = tmp_path / "vault"
+    store = ArtifactStore(root=vault_root, secrets=secrets)
+
+    case_id = "11111111-1111-4111-8111-111111111111"
+    _ = store.put(case_id=case_id, kind="test", data=b"safe")
+
+    # 建立具有相同前綴的攻擊者目錄，例如 vault_attacker
+    attacker_dir = tmp_path / "vault_attacker"
+    attacker_dir.mkdir(parents=True, exist_ok=True)
+    attacker_file = attacker_dir / "evil.enc"
+    attacker_file.write_bytes(b"evil outside data")
+
+    fake_artifact_id = "44444444-4444-4444-8444-444444444444"
+    symlink_path = vault_root / case_id / f"{fake_artifact_id}.enc"
+    try:
+        os.symlink(attacker_file, symlink_path)
+    except OSError:
+        pytest.skip("Filesystem does not support symlinks")
+
+    # 即使 attacker_file 的字串開頭為 str(vault_root)，is_relative_to 也必須精確判定為外部並拋出 PATH_TRAVERSAL
+    with pytest.raises(DomainError) as excinfo:
+        store.get(case_id=case_id, artifact_id=fake_artifact_id)
+    assert excinfo.value.code == "PATH_TRAVERSAL"
+
+    # 測試 case_dir 本身為 symlink 跳出根目錄的情境
+    evil_case_id = "55555555-5555-4555-8555-555555555555"
+    evil_case_symlink = vault_root / evil_case_id
+    try:
+        os.symlink(attacker_dir, evil_case_symlink)
+    except OSError:
+        pytest.skip("Filesystem does not support symlinks")
+
+    with pytest.raises(DomainError) as excinfo_dir:
+        store.get(case_id=evil_case_id, artifact_id="evil")
+    assert excinfo_dir.value.code == "PATH_TRAVERSAL"
+
+    with pytest.raises(DomainError) as excinfo_put:
+        store.put(case_id=evil_case_id, kind="test", data=b"leak")
+    assert excinfo_put.value.code == "PATH_TRAVERSAL"
+
+
+def test_wildcard_artifact_id_not_triggering_cross_case_error(tmp_path: Path):
+    """驗證 artifact_id 含 * 或 ? 等 glob 通配符時，不會誤比對其他案件檔案或誤觸跨案存取例外。"""
+    secrets = FakeSecretStore()
+    vault_root = tmp_path / "vault"
+    store = ArtifactStore(root=vault_root, secrets=secrets)
+
+    case_1 = "11111111-1111-4111-8111-111111111111"
+    case_2 = "22222222-2222-4222-8222-222222222222"
+    data = b"Case 1 payload"
+    _ = store.put(case_id=case_1, kind="contract", data=data)
+
+    # 在 case_2 嘗試以通配符查詢，若未逃逸 glob，將比對到 case_1 導致誤拋 ARTIFACT_CROSS_CASE_ACCESS
+    for wildcard in ["*", "*.*", "?", "[0-9]*"]:
+        with pytest.raises(DomainError) as excinfo:
+            store.get(case_id=case_2, artifact_id=wildcard)
+        assert excinfo.value.code == "ARTIFACT_NOT_FOUND"
+

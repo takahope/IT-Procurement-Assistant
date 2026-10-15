@@ -1,3 +1,4 @@
+import glob
 import os
 import struct
 import uuid
@@ -144,6 +145,13 @@ class ArtifactStore:
         payload = pack_envelope(case_id=case_id, kind=kind, nonce=nonce, ciphertext=ciphertext)
 
         case_dir = self.root / case_id
+        try:
+            resolved_case = case_dir.resolve()
+            if not resolved_case.is_relative_to(self.root):
+                raise DomainError("PATH_TRAVERSAL", "Case directory points outside storage root")
+        except OSError as e:
+            raise DomainError("PATH_TRAVERSAL", "Invalid case directory") from e
+
         case_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
         os.chmod(case_dir, 0o700)
 
@@ -165,18 +173,18 @@ class ArtifactStore:
         case_dir = self.root / case_id
         target_file = case_dir / f"{artifact_id}.enc"
 
-        # 檢驗 symlink 跳出
-        if target_file.is_symlink():
-            try:
-                resolved = target_file.resolve(strict=True)
-                if not str(resolved).startswith(str(self.root)):
-                    raise DomainError("PATH_TRAVERSAL", "Symlink points outside storage root")
-            except OSError as e:
-                raise DomainError("PATH_TRAVERSAL", "Invalid symlink") from e
+        # 檢驗 symlink 與目標路徑是否跳出 storage root（防止 case_dir 或檔案為跳出根目錄之 symlink）
+        try:
+            resolved = target_file.resolve()
+            if not resolved.is_relative_to(self.root):
+                raise DomainError("PATH_TRAVERSAL", "Symlink points outside storage root")
+        except OSError as e:
+            raise DomainError("PATH_TRAVERSAL", "Invalid symlink") from e
 
         if not target_file.exists():
             # 檢查是否屬於其他案件（跨案存取防護）
-            other_matches = list(self.root.glob(f"*/{artifact_id}.enc"))
+            escaped_id = glob.escape(artifact_id)
+            other_matches = list(self.root.glob(f"*/{escaped_id}.enc"))
             if other_matches:
                 raise DomainError(
                     "ARTIFACT_CROSS_CASE_ACCESS",

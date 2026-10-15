@@ -1,4 +1,5 @@
 import logging
+import os
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -103,6 +104,30 @@ def test_real_mode_insecure_filesystem_permissions_blocked(tmp_path: Path, monke
     report = check_runtime(policy=policy, operation="ingest")
     assert not report.ok
     assert any("permission" in issue.lower() or "0700" in issue for issue in report.issues)
+
+
+def test_probe_filesystem_permissions_cleanup_on_failure(tmp_path: Path, monkeypatch):
+    """驗證即使在測試權限期間拋出例外，.probe_perm 檔案依然被 try...finally 清理。"""
+    from procurement_review.runtime import gates
+
+    target_dir = tmp_path / "probe_dir"
+    target_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+
+    # 模擬在 chmod .probe_perm 時拋出 OSError
+    real_chmod = os.chmod
+
+    def mock_chmod(path, mode, *args, **kwargs):
+        if str(path).endswith(".probe_perm"):
+            raise OSError("Simulated chmod error during probe")
+        return real_chmod(path, mode, *args, **kwargs)
+
+    monkeypatch.setattr(gates.os, "chmod", mock_chmod)
+
+    success = gates._probe_filesystem_permissions(target_dir)
+    assert success is False
+
+    probe_file = target_dir / ".probe_perm"
+    assert not probe_file.exists(), ".probe_perm was not cleaned up on failure"
 
 
 def test_audit_event_whitelist_fields(caplog):
