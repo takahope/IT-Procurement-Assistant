@@ -7,7 +7,7 @@ from pathlib import Path
 import httpx
 import pytest
 
-from procurement_review.domain.enums import ProcurementFamily
+from procurement_review.domain.enums import ProcurementFamily, RuntimeMode
 from procurement_review.domain.errors import DomainError
 from procurement_review.domain.models import (
     CaseFacts,
@@ -19,7 +19,7 @@ from procurement_review.domain.models import (
     VersionRef,
 )
 from procurement_review.egress.approvals import approve
-from procurement_review.egress.dispatcher import dispatch
+from procurement_review.egress.dispatcher import dispatch, get_delivery_state
 from procurement_review.egress.payload import prepare_egress
 from procurement_review.masking.detector import RuleBasedDetector
 from procurement_review.providers.base import ProviderAdapter
@@ -413,3 +413,93 @@ def test_cloud_adapter_egress_rate_limit_and_server_error(
             adapter=cloud_adapter,
         )
     assert exc_500.value.code == "PROVIDER_ERROR"
+
+
+def test_cloud_adapter_egress_timeout(
+    repo: Repository,
+    detector: RuleBasedDetector,
+    cloud_adapter: CloudAdapter,
+    secret_store: FakeSecretStore,
+):
+    """驗證分派超時 (Timeout) 時拋出 DELIVERY_UNKNOWN 且交付狀態標記為 delivery_unknown。"""
+    review, run_id = make_review_and_run(repo)
+    draft = OutboundDraft(
+        draft_id=str(uuid.uuid4()),
+        run_id=run_id,
+        plaintext_body="超時分派測試內容",
+        sensitive_token_count=0,
+        assembled_at=datetime.now(UTC),
+    )
+    session = MaskingSession(
+        session_id=str(uuid.uuid4()),
+        case_id=review.case_id,
+        detector_version="rule-based-v1",
+        mapping_vault_ref="vault://masking/session-cloud-timeout",
+        outbound_hash="hash-timeout",
+        human_reviewed=True,
+        roundtrip_ok=True,
+    )
+
+    prepared = prepare_egress(
+        run_id=run_id,
+        draft=draft,
+        session=session,
+        detector=detector,
+        adapter=cloud_adapter,
+        repo=repo,
+    )
+    approval = approve(
+        request=prepared,
+        actor="ciso_auditor",
+        repo=repo,
+        scope="timeout_test",
+        max_attempts=3,
+    )
+
+    def timeout_handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ReadTimeout("Timeout while waiting for provider")
+
+    transport_timeout = httpx.MockTransport(timeout_handler)
+
+    with pytest.raises(DomainError) as exc_info:
+        dispatch(
+            prepared.request_id,
+            approval.approval_id,
+            repo=repo,
+            transport=transport_timeout,
+            secrets=secret_store,
+            adapter=cloud_adapter,
+        )
+
+    assert exc_info.value.code == "DELIVERY_UNKNOWN"
+    assert "timed out" in str(exc_info.value).lower()
+    # 核心驗收：交付狀態標記為 delivery_unknown
+    assert get_delivery_state(prepared.request_id, repo) == "delivery_unknown"
+
+
+def test_approved_provider_live_synthetic_refuses_mock_in_real_mode():
+    """真實模式不可使用 MockProvider 通過（離線邏輯測試）。"""
+    config = ProviderConfig(
+        provider="mock",
+        endpoint="https://mock.provider.local/v1/chat/completions",
+        model="mock-v1",
+        credential_ref="mock_key",
+        price_version="2026-10-15",
+    )
+    adapter = CloudAdapter(config=config)
+    with pytest.raises(DomainError) as exc_info:
+        adapter.validate_runtime_mode(RuntimeMode.REAL)
+    assert exc_info.value.code == "MOCK_PROVIDER_DISALLOWED_IN_REAL"
+
+
+def test_cloud_adapter_rejects_oversized_response(cloud_adapter: CloudAdapter):
+    """驗證超過上限之 response payload 拒絕解碼。"""
+    max_bytes = cloud_adapter.config.limits.max_response_bytes
+    oversized_body = b"X" * (max_bytes + 1)
+
+    with pytest.raises(DomainError) as exc_info:
+        cloud_adapter.decode(oversized_body)
+
+    assert exc_info.value.code == "RESPONSE_TOO_LARGE"
+    assert f"Response exceeded {max_bytes} bytes" in str(exc_info.value)
+

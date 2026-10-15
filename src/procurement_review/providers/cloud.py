@@ -35,7 +35,12 @@ class CloudAdapter:
             model="approved-review-v1",
             credential_ref="approved_cloud_api_key",
             price_version="2026-10-15",
-            rate_limits={"rpm": 60, "tpm": 100000, "max_request_bytes": 1048576},
+            rate_limits={
+                "rpm": 60,
+                "tpm": 100000,
+                "max_request_bytes": 1048576,
+                "max_response_bytes": 2097152,
+            },
         )
 
     def validate_runtime_mode(self, mode: RuntimeMode) -> None:
@@ -88,10 +93,17 @@ class CloudAdapter:
         """將供應商回傳之原始回應 bytes 解析為 ProviderReply。
 
         安全保證：
+        - 檢查回應大小，超過上限時拋出 RESPONSE_TOO_LARGE。
         - 遇 JSON 解析錯誤時，僅記錄長度與例外名稱，嚴禁將原始內容寫入日誌。
         - 偵測到 tool call 時拋出 TOOL_CALL_REJECTED。
         - 支援 usage 為 None 之情境。
         """
+        if len(body) > self.config.limits.max_response_bytes:
+            raise DomainError(
+                "RESPONSE_TOO_LARGE",
+                f"Response exceeded {self.config.limits.max_response_bytes} bytes",
+            )
+
         req_id = request_id or str(uuid.uuid4())
 
         try:

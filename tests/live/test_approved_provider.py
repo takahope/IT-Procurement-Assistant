@@ -6,8 +6,6 @@ from datetime import UTC, datetime
 import httpx
 import pytest
 
-from procurement_review.domain.enums import RuntimeMode
-from procurement_review.domain.errors import DomainError
 from procurement_review.domain.models import OutboundDraft, ProviderConfig, ProviderReply
 from procurement_review.providers.cloud import CloudAdapter
 
@@ -80,17 +78,3 @@ def test_approved_provider_live_synthetic_roundtrip():
     assert audit_record["request_id"] is not None
     assert audit_record["approval_hash"] == approval_hash
 
-
-def test_approved_provider_live_synthetic_refuses_mock_in_real_mode():
-    """真實模式不可使用 MockProvider 通過。"""
-    config = ProviderConfig(
-        provider="mock",
-        endpoint="https://mock.provider.local/v1/chat/completions",
-        model="mock-v1",
-        credential_ref="mock_key",
-        price_version="2026-10-15",
-    )
-    adapter = CloudAdapter(config=config)
-    with pytest.raises(DomainError) as exc_info:
-        adapter.validate_runtime_mode(RuntimeMode.REAL)
-    assert exc_info.value.code == "MOCK_PROVIDER_DISALLOWED_IN_REAL"

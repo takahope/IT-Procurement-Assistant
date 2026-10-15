@@ -668,6 +668,41 @@ class PurgePlan(StrictBaseModel):
     planned_at: datetime
 
 
+class ProviderLimits:
+    """供應商速率與安全限制門檻"""
+
+    def __init__(self, data: dict[str, Any] | None = None) -> None:
+        self._data = data or {}
+
+    @property
+    def max_response_bytes(self) -> int:
+        return int(self._data.get("max_response_bytes", 2097152))
+
+    @property
+    def max_request_bytes(self) -> int:
+        return int(self._data.get("max_request_bytes", 1048576))
+
+    @property
+    def timeout_seconds(self) -> int:
+        return int(self._data.get("timeout_seconds", 30))
+
+    @property
+    def rpm(self) -> int:
+        return int(self._data.get("rpm", 60))
+
+    @property
+    def tpm(self) -> int:
+        return int(self._data.get("tpm", 100000))
+
+    def get(self, key: str, default: Any = None) -> Any:
+        return self._data.get(key, default)
+
+    def __getattr__(self, name: str) -> Any:
+        if name in self._data:
+            return self._data[name]
+        raise AttributeError(f"ProviderLimits has no attribute '{name}'")
+
+
 class ProviderConfig(StrictBaseModel):
     """模型供應商設定"""
 
@@ -678,6 +713,11 @@ class ProviderConfig(StrictBaseModel):
     rate_limits: dict[str, Any] = Field(default_factory=dict)
     price_version: str
     approval_ref: VersionRef | None = None
+
+    @property
+    def limits(self) -> ProviderLimits:
+        return ProviderLimits(self.rate_limits)
+
 
 
 class AuditEvent(StrictBaseModel):
