@@ -11,6 +11,7 @@ from procurement_review.domain.enums import RuntimeMode
 from procurement_review.domain.errors import DomainError
 from procurement_review.domain.models import Rule, RuntimePolicy, SourceReference
 from procurement_review.rules.catalog import RuleEngine
+from procurement_review.rules.seeder import seed_rules_and_sources
 from procurement_review.runtime.lifecycle import (
     create_backup,
     execute_purge,

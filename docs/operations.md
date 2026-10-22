@@ -167,7 +167,7 @@ uv run procurement-review doctor --mode synthetic --data-dir /path/to/data
   1. **立即停止 Web 服務**：中止所有 `procurement-review serve` 處理程序。
   2. **產製緊急密封備份**：使用全新的高強度復原金鑰產製加密備份：
      ```bash
-     uv run procurement-review backup --data-dir ./data --target /secure_storage/emergency.bundle --recovery-key "NEW_EMERGENCY_KEY"
+     uv run procurement-review backup --data-dir ~/.procurement_review/data --target /secure_storage/emergency.bundle --recovery-key "NEW_EMERGENCY_KEY"
      ```
   3. **清空舊金鑰與輪換**：從 Keychain 移除舊 `artifact_master_key`，重新生成 256 位元隨機金鑰。
   4. **全量 Artifact 重密**：依第 8 節金鑰輪換程序解密並以新金鑰重新加密。

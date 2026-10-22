@@ -67,14 +67,15 @@ flowchart TD
 - 套件與依賴管理器：[uv](https://docs.astral.sh/uv/)
 
 ### 3.2 系統自我診斷 (`doctor`)
-在啟動服務前，請使用 `doctor` 子命令檢查環境、依賴套件、金鑰儲存庫及目錄權限：
+在啟動服務前，請使用 `doctor` 子命令檢查環境、依賴套件、金鑰儲存庫及目錄權限。
+系統預設資料目錄為 `~/.procurement_review/data`（為防範機敏資料誤提交或外洩，資安防禦機制強制禁止將資料儲存庫設於 Git 程式碼庫內部）：
 ```bash
-uv run procurement-review doctor --mode synthetic --data-dir ./data
+uv run procurement-review doctor --mode synthetic
 ```
 
 ### 3.3 啟動 Web 審查服務 (`serve`)
 ```bash
-uv run procurement-review serve --mode synthetic --data-dir ./data --port 8765
+uv run procurement-review serve --mode synthetic --port 8765
 ```
 啟動後終端機將顯示包含單次 Bootstrap Token 之本機網址：
 ```
@@ -93,17 +94,17 @@ uv run procurement-review evaluate \
 
 ### 3.5 加密備份與受控清除 (`backup`, `restore`, `purge`)
 ```bash
-# 產製加密備份
-uv run procurement-review backup --data-dir ./data --target ./backup.bundle --recovery-key "YOUR_RECOVERY_KEY"
+# 產製加密備份（資料目錄預設為 ~/.procurement_review/data）
+uv run procurement-review backup --target ./backup.bundle --recovery-key "YOUR_RECOVERY_KEY"
 
-# 還原加密備份至新目錄
-uv run procurement-review restore --backup ./backup.bundle --target ./restored_data --recovery-key "YOUR_RECOVERY_KEY"
+# 還原加密備份至新目錄（目標路徑不可位於 Git Repo 內部）
+uv run procurement-review restore --backup ./backup.bundle --target ~/.procurement_review/restored_data --recovery-key "YOUR_RECOVERY_KEY"
 
 # 受控清除預覽 (Dry-run)
-uv run procurement-review purge --case-id "<UUID>" --data-dir ./data --dry-run
+uv run procurement-review purge --case-id "<UUID>" --dry-run
 
 # 綁定確認雜湊執行受控清除
-uv run procurement-review purge --case-id "<UUID>" --data-dir ./data --confirmation-hash "<HASH>"
+uv run procurement-review purge --case-id "<UUID>" --confirmation-hash "<HASH>"
 ```
 
 ---

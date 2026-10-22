@@ -15,6 +15,7 @@ from procurement_review.rules.releases import (
     revoke_rule,
     select_requirements,
 )
+from procurement_review.rules.seeder import seed_rules_and_sources
 
 __all__ = [
     "RuleCatalog",
@@ -27,5 +28,6 @@ __all__ = [
     "release_rules",
     "revoke_rule",
     "rule_to_requirement",
+    "seed_rules_and_sources",
     "select_requirements",
 ]
